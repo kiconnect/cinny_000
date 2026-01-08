@@ -1,4 +1,19 @@
-# Cinny
+# KIconnect Cinny Fork
+
+This project is a fork of https://github.com/cinnyapp/cinny
+
+License: GNU AGPL v3  
+Original project © Cinny contributors.
+
+This fork contains modifications for KIconnect
+(client-side UI adjustments and automated room cleanup on logout).
+
+Source code of this fork is available in this repository.
+
+© 2026 Alfred Doblinger
+
+#cinny
+
 <p>
     <a href="https://github.com/ajbura/cinny/releases">
         <img alt="GitHub release downloads" src="https://img.shields.io/github/downloads/ajbura/cinny/total?logo=github&style=social"></a>
