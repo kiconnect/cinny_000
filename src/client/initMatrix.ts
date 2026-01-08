@@ -36,6 +36,21 @@ export const initClient = async (session: Session): Promise<MatrixClient> => {
 
   mx.setMaxListeners(50);
 
+  
+
+  // doblinger - autologin
+
+  mx.on('RoomMember.membership', (_event, member) => {
+    if (
+      member.membership === 'invite' &&
+      member.userId === mx.getUserId()
+    ) {
+      mx.joinRoom(member.roomId).catch(() => {});
+    }
+  });
+
+  // ende
+
   return mx;
 };
 

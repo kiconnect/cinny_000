@@ -117,6 +117,7 @@ import { useTheme } from '../../hooks/useTheme';
 import { useRoomCreatorsTag } from '../../hooks/useRoomCreatorsTag';
 import { usePowerLevelTags } from '../../hooks/usePowerLevelTags';
 import { useComposingCheck } from '../../hooks/useComposingCheck';
+import { KiconnectRoomActions } from '../../kiconnect/components/RoomActions';
 
 interface RoomInputProps {
   editor: Editor;
@@ -674,6 +675,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
               </IconButton>
             </>
           }
+          /*   alte Variante
           bottom={
             toolbar && (
               <div>
@@ -682,6 +684,19 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
               </div>
             )
           }
+          */
+          bottom={
+            <>
+              {toolbar && (
+                <div>
+                  <Line variant="SurfaceVariant" size="300" />
+                  <Toolbar />
+                </div>
+              )}
+              <KiconnectRoomActions room={room} />
+            </>
+          }
+
         />
       </div>
     );

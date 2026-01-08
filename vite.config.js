@@ -72,7 +72,7 @@ export default defineConfig({
   publicDir: false,
   base: buildConfig.base,
   server: {
-    port: 8080,
+    port: 8088,
     host: true,
     fs: {
       // Allow serving files from one level up to the project root
