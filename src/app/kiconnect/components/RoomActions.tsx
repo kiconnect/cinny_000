@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import type { Room } from 'matrix-js-sdk/src/matrix';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 
@@ -20,6 +20,25 @@ function getCaseStatus(room: Room): 'open' | 'done' {
 export function KiconnectRoomActions({ room }: Props): JSX.Element {
   const mx = useMatrixClient();
   const [showLogin, setShowLogin] = useState(false);
+
+  // 🔁 erzwingt Re-Render bei Case-State-Änderung
+  const [, forceUpdate] = useState(0);
+
+  useEffect(() => {
+    const handler = (event: any) => {
+      if (
+        event.getType?.() === 'io.kiconnect.case' &&
+        event.getStateKey?.() === ''
+      ) {
+        forceUpdate((x) => x + 1);
+      }
+    };
+
+    room.on('RoomState.events', handler);
+    return () => {
+      room.off('RoomState.events', handler);
+    };
+  }, [room]);
 
   // -----------------------------
   // TEAMRAUM → Login / Logout
@@ -44,32 +63,24 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
   }
 
   // -----------------------------
-  // PATIENTENRAUM → Erledigt
+  // PATIENTENRAUM → Erledigt / Undo
   // -----------------------------
   const status = getCaseStatus(room);
   const label = status === 'done' ? 'Wieder öffnen' : 'Erledigt';
 
-  const onDone = async () => {
-    if (!window.confirm('Alles erledigt?\nDie Anfrage wird endgültig gelöscht.')) {
-      return;
-    }
-
-    await mx.sendStateEvent(
+  const onToggleDone = () => {
+    mx.sendEvent(
       room.roomId,
-      'io.kiconnect.case',
-      {
-        status: 'done',
-        by: mx.getUserId(),
-        ts: Date.now(),
-      },
-      ''
+      "io.kiconnect.case.toggle",
+      { by: mx.getUserId(), ts: Date.now() }
     );
   };
 
   return (
     <div className="kiconnect-room-actions">
       <div className="kiconnect-room-actions-divider" />
-      <button onClick={onDone}>{label}</button>
+      <button onClick={onToggleDone}>{label}</button>
     </div>
   );
+
 }

@@ -51,6 +51,9 @@ import { RoomNotificationModeSwitcher } from '../../components/RoomNotificationS
 import { useRoomCreators } from '../../hooks/useRoomCreators';
 import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { InviteUserPrompt } from '../../components/invite-user-prompt';
+// doblinger kiconnect
+import { useStateEventCallback } from '../../hooks/useStateEventCallback';
+
 
 type RoomNavItemMenuProps = {
   room: Room;
@@ -234,7 +237,35 @@ export function RoomNavItem({
   const unread = useRoomUnread(room.roomId, roomToUnreadAtom);
   const typingMember = useRoomTypingMember(room.roomId).filter(
     (receipt) => receipt.userId !== mx.getUserId()
+    );
+  // doblinger KIconnect
+  const topic = room.currentState
+    ?.getStateEvents("m.room.topic", "")
+    ?.getContent()?.topic;
+
+  // doblinger KIconnect – Case-Status
+  const caseDone = room.currentState
+    ?.getStateEvents('io.kiconnect.case', '')
+    ?.getContent()?.status === 'done';
+
+  // doblinger erzwingt Re-Render bei Case-State
+  const [, forceUpdate] = useState(0);
+
+  useStateEventCallback(
+    mx,
+    (event) => {
+      if (
+        event.getRoomId() === room.roomId &&
+        event.getType() === 'io.kiconnect.case'
+      ) {
+        forceUpdate((x) => x + 1); // Re-Render erzwingen
+      }
+    }
   );
+
+  // ende
+
+  
 
   const handleContextMenu: MouseEventHandler<HTMLElement> = (evt) => {
     evt.preventDefault();
@@ -291,11 +322,41 @@ export function RoomNavItem({
                 />
               )}
             </Avatar>
+            {/*}
             <Box as="span" grow="Yes">
               <Text priority={unread ? '500' : '300'} as="span" size="Inherit" truncate>
                 {room.name}
               </Text>
             </Box>
+            ab hier doblinger neu KIconnect
+            */}
+            <Box
+              as="span"
+              grow="Yes"
+              style={{ display: 'flex', flexDirection: 'column' }}
+            >
+              <Text priority={unread ? '500' : '300'} as="span" size="Inherit" truncate>
+                {room.name}
+              </Text>
+
+              {topic && (
+                <Text
+                  as="span"
+                  size="T300"
+                  truncate
+                  style={{
+                    color: caseDone ? undefined : '#c0392b',   // offen = rot
+                    fontWeight: caseDone ? undefined : '600', // offen = fett
+                    opacity: caseDone ? 0.4 : 0.9,             // erledigt = grau
+                    textDecoration: caseDone ? 'line-through' : 'none',
+                    lineHeight: '1.2',
+                  }}
+                >
+                  {topic}
+                </Text>
+              )}
+            </Box>
+
             {!optionsVisible && !unread && !selected && typingMember.length > 0 && (
               <Badge size="300" variant="Secondary" fill="Soft" radii="Pill" outlined>
                 <TypingIndicator size="300" disableAnimation />
