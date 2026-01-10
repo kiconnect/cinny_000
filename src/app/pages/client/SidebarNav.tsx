@@ -22,6 +22,8 @@ import { CreateTab } from './sidebar/CreateTab';
 export function SidebarNav() {
   const scrollRef = useRef<HTMLDivElement>(null);
 
+
+  {/* Ändeurngen Doblinger */}
   return (
     <Sidebar>
       <SidebarContent
@@ -29,13 +31,13 @@ export function SidebarNav() {
           <Scroll ref={scrollRef} variant="Background" size="0">
             <SidebarStack>
               <HomeTab />
-              <DirectTab />
+              {/* <DirectTab /> */}
             </SidebarStack>
             <SpaceTabs scrollRef={scrollRef} />
             <SidebarStackSeparator />
             <SidebarStack>
-              <ExploreTab />
-              <CreateTab />
+              {/* <ExploreTab /> */}
+              {/* <CreateTab /> */}
             </SidebarStack>
           </Scroll>
         }
@@ -43,7 +45,7 @@ export function SidebarNav() {
           <>
             <SidebarStackSeparator />
             <SidebarStack>
-              <SearchTab />
+              {/* <SearchTab /> */}
               <UnverifiedTab />
               <InboxTab />
               <SettingsTab />

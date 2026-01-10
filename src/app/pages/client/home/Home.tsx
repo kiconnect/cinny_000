@@ -116,8 +116,15 @@ function HomeHeader() {
       <PageNavHeader>
         <Box alignItems="Center" grow="Yes" gap="300">
           <Box grow="Yes">
-            <Text size="H4" truncate>
-              Home
+            {/* doblinger Anpassung */}
+            <Text size="H1" truncate
+            style={{
+              color: '#3F8FAF',
+              fontFamily: 'Inter, sans-serif',
+              fontWeight: 600,
+            }}
+          >
+              KI connect
             </Text>
           </Box>
           <Box>
@@ -240,6 +247,7 @@ export function Home() {
       ) : (
         <PageNavContent scrollRef={scrollRef}>
           <Box direction="Column" gap="300">
+            {/* doblinger - Anpassungen Menü 2. Spalte create room und join with adress ausblenden
             <NavCategory>
               <NavItem variant="Background" radii="400" aria-selected={createRoomSelected}>
                 <NavButton onClick={() => navigate(getHomeCreatePath())}>
@@ -257,6 +265,7 @@ export function Home() {
                   </NavItemContent>
                 </NavButton>
               </NavItem>
+              
               <UseStateProvider initial={false}>
                 {(open, setOpen) => (
                   <>
@@ -312,6 +321,7 @@ export function Home() {
                 </NavLink>
               </NavItem>
             </NavCategory>
+            */}
             <NavCategory>
               <NavCategoryHeader>
                 <RoomNavCategoryButton
