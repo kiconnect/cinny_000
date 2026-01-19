@@ -5,6 +5,7 @@ import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { isTeamRoom } from '../logic/roomState';
 import { clientLogoutAll } from '../logic/logout';
 import KiconnectLoginDialog from '../components/KiconnectLoginDialog';
+import KiconnectSearchDialog from '../components/KiconnectSearchDialog';
 
 import '../styles/RoomActions.css';
 
@@ -19,9 +20,11 @@ function getCaseStatus(room: Room): 'open' | 'done' {
 
 export function KiconnectRoomActions({ room }: Props): JSX.Element {
   const mx = useMatrixClient();
-  const [showLogin, setShowLogin] = useState(false);
 
-  // 🔁 erzwingt Re-Render bei Case-State-Änderung
+  const [showLogin, setShowLogin] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+
+  // 🔁 Re-Render bei Case-State-Änderung
   const [, forceUpdate] = useState(0);
 
   useEffect(() => {
@@ -41,11 +44,18 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
   }, [room]);
 
   // -----------------------------
-  // TEAMRAUM → Login / Logout
+  // TEAMRAUM → Suche / Login / Logout
   // -----------------------------
   if (isTeamRoom(room)) {
     return (
       <>
+        {showSearch && (
+          <KiconnectSearchDialog
+            room={room}
+            onFinished={() => setShowSearch(false)}
+          />
+        )}
+
         {showLogin && (
           <KiconnectLoginDialog
             room={room}
@@ -55,6 +65,7 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
 
         <div className="kiconnect-room-actions">
           <div className="kiconnect-room-actions-divider" />
+          <button onClick={() => setShowSearch(true)}>Suche</button>
           <button onClick={() => setShowLogin(true)}>Login</button>
           <button onClick={() => clientLogoutAll(mx)}>Logout</button>
         </div>
@@ -69,11 +80,10 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
   const label = status === 'done' ? 'Wieder öffnen' : 'Erledigt';
 
   const onToggleDone = () => {
-    mx.sendEvent(
-      room.roomId,
-      "io.kiconnect.case.toggle",
-      { by: mx.getUserId(), ts: Date.now() }
-    );
+    mx.sendEvent(room.roomId, 'io.kiconnect.case.toggle', {
+      by: mx.getUserId(),
+      ts: Date.now(),
+    });
   };
 
   return (
@@ -82,5 +92,4 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
       <button onClick={onToggleDone}>{label}</button>
     </div>
   );
-
 }
