@@ -24,10 +24,10 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
   const [showLogin, setShowLogin] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
 
-  // 🔁 Re-Render bei Case-State-Änderung
-  const [, forceUpdate] = useState(0);
-
+  // 🔁 Re-Render bei Case-State-Änderung (NUR im Patientenraum)
   useEffect(() => {
+    if (isTeamRoom(room)) return;
+
     const handler = (event: any) => {
       if (
         event.getType?.() === 'io.kiconnect.case' &&
@@ -42,6 +42,8 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
       room.off('RoomState.events', handler);
     };
   }, [room]);
+
+  
 
   // -----------------------------
   // TEAMRAUM → Suche / Login / Logout
@@ -67,7 +69,7 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
           <div className="kiconnect-room-actions-divider" />
           <button onClick={() => setShowSearch(true)}>Suche</button>
           <button onClick={() => setShowLogin(true)}>Login</button>
-          <button onClick={() => clientLogoutAll(mx)}>Logout</button>
+          <button onClick={() => clientLogoutAll(mx, room)}>Logout</button>
         </div>
       </>
     );

@@ -1,43 +1,21 @@
 import { EventType, type Room, type MatrixClient } from 'matrix-js-sdk';
 
-export async function clientLogoutAll(mx: MatrixClient): Promise<void> {
-  const rooms: Room[] = mx.getRooms();
-  let botRoomId: string | null = null;
+export async function clientLogoutAll(mx: MatrixClient, room: Room): Promise<void> {
+  // 1) Logout-Command senden (NUR Text)
+  await mx.sendEvent(room.roomId, EventType.RoomMessage, {
+    msgtype: 'm.text',
+    body: '!logout',
+  });
 
-  const actions: Promise<unknown>[] = [];
+  // 2) danach alle anderen Räume verlassen
+  const rooms = mx.getRooms();
+  for (const r of rooms) {
+    if (r.roomId === room.roomId) continue;
 
-  for (const room of rooms) {
-    const isBotRoom = !!room.currentState?.getStateEvents(
-      'io.kiconnect.teamroom',
-      ''
-    );
-
-    if (isBotRoom) {
-      botRoomId = room.roomId;
-      continue;
-    }
-
-    const m = room.getMyMembership();
+    const m = r.getMyMembership();
     if (m === 'join' || m === 'invite') {
-      actions.push(
-        (async () => {
-          try {
-            await mx.leave(room.roomId);
-          } catch {}
-          try {
-            await mx.forget(room.roomId);
-          } catch {}
-        })()
-      );
+      try { await mx.leave(r.roomId); } catch {}
+      try { await mx.forget(r.roomId); } catch {}
     }
-  }
-
-  await Promise.allSettled(actions);
-
-  if (botRoomId) {
-    await mx.sendEvent(botRoomId, EventType.RoomMessage, {
-      msgtype: 'm.text',
-      body: '!logout',
-    });
   }
 }
