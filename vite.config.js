@@ -74,6 +74,9 @@ export default defineConfig({
   server: {
     port: 8088,
     host: true,
+    allowedHosts: [
+      'test.kiconnect.at'
+    ],
     fs: {
       // Allow serving files from one level up to the project root
       allow: ['..'],
