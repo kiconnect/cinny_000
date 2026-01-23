@@ -3,7 +3,7 @@
   "homeserverList": [
     "matrix.kiconnect.at"
   ],
-  "allowCustomHomeservers": false,
+  "allowCustomHomeservers": true,
 
   "appearance": {
     "theme": "light"
