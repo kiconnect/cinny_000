@@ -4,6 +4,7 @@
     "matrix.kiconnect.at"
   ],
   "allowCustomHomeservers": true,
+  "disableSSO": true,
 
   "appearance": {
     "theme": "light"
