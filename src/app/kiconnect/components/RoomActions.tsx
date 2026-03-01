@@ -3,8 +3,7 @@ import type { Room } from 'matrix-js-sdk/src/matrix';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 
 import { isTeamRoom } from '../logic/roomState';
-import { clientLogoutAll } from '../logic/logout';
-import KiconnectLoginDialog from '../components/KiconnectLoginDialog';
+import { clientLogout } from '../logic/logout';
 import KiconnectSearchDialog from '../components/KiconnectSearchDialog';
 
 import '../styles/RoomActions.css';
@@ -21,18 +20,20 @@ function getCaseStatus(room: Room): 'open' | 'done' {
 export function KiconnectRoomActions({ room }: Props): JSX.Element {
   const mx = useMatrixClient();
 
-  const [showLogin, setShowLogin] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
+  const [, forceUpdate] = useState(0);
 
   // 🔁 Re-Render bei Case-State-Änderung (NUR im Patientenraum)
   useEffect(() => {
     if (isTeamRoom(room)) return;
 
     const handler = (event: any) => {
-      if (
-        event.getType?.() === 'io.kiconnect.case' &&
-        event.getStateKey?.() === ''
-      ) {
+      const t = event.getType?.();
+      const sk = event.getStateKey?.();
+
+      if (sk !== '') return;
+
+      if (t === 'io.kiconnect.case' || t === 'io.kiconnect.room') {
         forceUpdate((x) => x + 1);
       }
     };
@@ -43,33 +44,20 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
     };
   }, [room]);
 
-  
-
   // -----------------------------
-  // TEAMRAUM → Suche / Login / Logout
+  // TEAMRAUM → Suche / Logout
   // -----------------------------
   if (isTeamRoom(room)) {
     return (
       <>
         {showSearch && (
-          <KiconnectSearchDialog
-            room={room}
-            onFinished={() => setShowSearch(false)}
-          />
-        )}
-
-        {showLogin && (
-          <KiconnectLoginDialog
-            room={room}
-            onFinished={() => setShowLogin(false)}
-          />
+          <KiconnectSearchDialog room={room} onFinished={() => setShowSearch(false)} />
         )}
 
         <div className="kiconnect-room-actions">
           <div className="kiconnect-room-actions-divider" />
           <button onClick={() => setShowSearch(true)}>Suche</button>
-          <button onClick={() => setShowLogin(true)}>Login</button>
-          <button onClick={() => clientLogoutAll(mx, room)}>Logout</button>
+          <button onClick={() => clientLogout(mx)}>Logout</button>
         </div>
       </>
     );

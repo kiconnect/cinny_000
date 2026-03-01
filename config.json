@@ -1,7 +1,7 @@
 {
   "defaultHomeserver": 0,
   "homeserverList": [
-    "matrix.kiconnect.at"
+    "kiconnect.at"
   ],
   "allowCustomHomeservers": true,
   "disableSSO": true,

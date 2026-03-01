@@ -1,0 +1,8 @@
+npm run start
+
+http://100.119.158.55:8088/
+
+im kiconnect_cinny cleint in keycloak:
+Valid redirect URIs
+Test (tailscale): http://100.119.158.55:8088/*
+Produktiv: https://cinny.kiconnect.at (oder wei auch immer dann über caddy eingegeben!)
