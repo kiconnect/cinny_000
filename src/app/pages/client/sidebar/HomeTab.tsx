@@ -26,6 +26,7 @@ import { markAsRead } from '../../../utils/notifications';
 import { stopPropagation } from '../../../utils/keyboard';
 import { useSetting } from '../../../state/hooks/settings';
 import { settingsAtom } from '../../../state/settings';
+import kiconnectIcon from "../../../assets/ICON_1_3_2026_bkg_leer.png";
 
 type HomeMenuProps = {
   requestClose: () => void;
@@ -93,8 +94,9 @@ export function HomeTab() {
     });
   };
 
+  {/* doblinger - logo statt home button*/}
   return (
-    <SidebarItem active={homeSelected}>
+    <SidebarItem active={false}>
       <SidebarItemTooltip tooltip="Home">
         {(triggerRef) => (
           <SidebarAvatar
@@ -104,7 +106,17 @@ export function HomeTab() {
             onClick={handleHomeClick}
             onContextMenu={handleContextMenu}
           >
-            <Icon src={Icons.Home} filled={homeSelected} />
+            <img
+              src={kiconnectIcon}
+              alt=""
+              style={{
+                width: 80,
+                height: 80,
+                objectFit: "contain",
+                display: "block",
+                opacity: homeSelected ? 1 : 0.9,
+              }}
+            />
           </SidebarAvatar>
         )}
       </SidebarItemTooltip>

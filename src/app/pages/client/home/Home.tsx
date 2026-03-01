@@ -65,6 +65,7 @@ import {
 import { UseStateProvider } from '../../../components/UseStateProvider';
 import { JoinAddressPrompt } from '../../../components/join-address-prompt';
 import { _RoomSearchParams } from '../../paths';
+import kiconnectIcon from '../../../assets/kiconnect-icon.png';
 
 type HomeMenuProps = {
   requestClose: () => void;
@@ -117,11 +118,11 @@ function HomeHeader() {
         <Box alignItems="Center" grow="Yes" gap="300">
           <Box grow="Yes">
             {/* doblinger Anpassung */}
-            <Text size="H1" truncate
+            <Text size="H2" truncate
             style={{
               color: '#3F8FAF',
               fontFamily: 'Inter, sans-serif',
-              fontWeight: 600,
+              fontWeight: 400,
             }}
           >
               KI connect
