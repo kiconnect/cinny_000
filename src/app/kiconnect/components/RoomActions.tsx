@@ -73,18 +73,34 @@ function getRoleFromSpaceId(
   return undefined;
 }
 
+function getOtherRole(role: CaseRole | undefined): CaseRole | undefined {
+  if (role === "arzt") return "team";
+  if (role === "team") return "arzt";
+  return undefined;
+}
+
 function getCaseContent(room: Room): CaseContent | undefined {
   const ev = room.currentState?.getStateEvents?.("io.kiconnect.case", "");
   return ev?.getContent?.() as CaseContent | undefined;
 }
 
-function getCaseStatus(room: Room, selectedSpaceId: string | undefined): CaseStatus {
+function getOwnRoleStatus(
+  room: Room,
+  selectedSpaceId: string | undefined
+): { role?: CaseRole; own: CaseStatus; other: CaseStatus } {
   const content = getCaseContent(room);
   const role = getRoleFromSpaceId(content, selectedSpaceId);
+  const otherRole = getOtherRole(role);
 
-  if (!role) return "done";
+  if (!role || !otherRole) {
+    return { role: undefined, own: "done", other: "done" };
+  }
 
-  return getRoleEntryState(content?.roles?.[role]);
+  return {
+    role,
+    own: getRoleEntryState(content?.roles?.[role]),
+    other: getRoleEntryState(content?.roles?.[otherRole]),
+  };
 }
 
 function toErrString(e: unknown): string {
@@ -117,8 +133,21 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
   const [err, setErr] = useState<string | null>(null);
 
   const teamRoom = useMemo(() => isTeamRoom(room), [room]);
-  const status = getCaseStatus(room, selectedSpaceId);
-  const label = status === "done" ? "Wieder öffnen" : "Erledigt";
+  const caseInfo = getOwnRoleStatus(room, selectedSpaceId);
+
+  const erledigtLabel = caseInfo.own === "done" ? "Wieder öffnen" : "Erledigt";
+
+  const canForward =
+    !!caseInfo.role &&
+    (
+      (caseInfo.own === "open" && caseInfo.other === "done") ||
+      (caseInfo.own === "done" && caseInfo.other === "open")
+    );
+
+  const forwardLabel =
+    caseInfo.own === "done" && caseInfo.other === "open"
+      ? "Weitergeleitet"
+      : "Weiterleiten";
 
   useEffect(() => {
     if (teamRoom) return;
@@ -164,13 +193,6 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
         throw new Error("Keine gültige User-Space-ID verfügbar.");
       }
 
-      console.log("[CASE][TOGGLE][OUT]", {
-        roomId: room.roomId,
-        by: mx.getUserId(),
-        space_room_id: spaceRoomId,
-        current_status: status,
-      });
-
       await mx.sendEvent(room.roomId, "io.kiconnect.case.toggle", {
         by: mx.getUserId(),
         ts: Date.now(),
@@ -180,6 +202,49 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
       setErr(toErrString(e));
     } finally {
       setSending(false);
+    }
+  };
+
+  const onForward = async () => {
+    console.log("[FORWARD] click", {
+      sending,
+      roomId: room.roomId,
+      selectedSpaceId,
+      caseInfo,
+    });
+
+    if (sending) {
+      console.log("[FORWARD] abort sending=true");
+      return;
+    }
+
+    setSending(true);
+    setErr(null);
+
+    try {
+      const spaceRoomId = selectedSpaceId?.trim();
+      console.log("[FORWARD] spaceRoomId", spaceRoomId);
+
+      if (!isUsableSpaceId(spaceRoomId)) {
+        console.log("[FORWARD] abort invalid spaceRoomId");
+        throw new Error("Keine gültige User-Space-ID verfügbar.");
+      }
+
+      console.log("[FORWARD] before sendEvent");
+
+      const res = await mx.sendEvent(room.roomId, "io.kiconnect.case.forward", {
+        by: mx.getUserId(),
+        ts: Date.now(),
+        space_room_id: spaceRoomId,
+      });
+
+      console.log("[FORWARD] sendEvent ok", res);
+    } catch (e) {
+      console.error("[FORWARD] sendEvent error", e);
+      setErr(toErrString(e));
+    } finally {
+      setSending(false);
+      console.log("[FORWARD] finally");
     }
   };
 
@@ -207,8 +272,15 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
     <div className="kiconnect-room-actions">
       <div className="kiconnect-room-actions-divider" />
       <button onClick={onToggleDone} disabled={sending}>
-        {sending ? "…" : label}
+        {sending ? "…" : erledigtLabel}
       </button>
+
+      {canForward && (
+        <button onClick={onForward} disabled={sending}>
+          {sending ? "…" : forwardLabel}
+        </button>
+      )}
+
       {err && <span style={{ marginLeft: 8, fontSize: 12 }}>{err}</span>}
     </div>
   );
