@@ -51,15 +51,17 @@ import { RoomNotificationModeSwitcher } from '../../components/RoomNotificationS
 import { useRoomCreators } from '../../hooks/useRoomCreators';
 import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { InviteUserPrompt } from '../../components/invite-user-prompt';
-// doblinger kiconnect
+/*** DOBLINGER *** */
 import { useStateEventCallback } from '../../hooks/useStateEventCallback';
-
+import { useSelectedSpace } from '../../hooks/router/useSelectedSpace';
+/*** DOBLINGER *** */
 
 type RoomNavItemMenuProps = {
   room: Room;
   requestClose: () => void;
   notificationMode?: RoomNotificationMode;
 };
+
 const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
   ({ room, requestClose, notificationMode }, ref) => {
     const mx = useMatrixClient();
@@ -212,6 +214,63 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
   }
 );
 
+/*** DOBLINGER *** */
+type CaseRole = 'arzt' | 'team';
+
+type CaseRoleEntry = {
+  space_room_id?: string;
+  state?: string;
+};
+
+type CaseContent = {
+  roles?: {
+    arzt?: CaseRoleEntry | string;
+    team?: CaseRoleEntry | string;
+  };
+};
+
+function getRoleEntryState(entry: CaseRoleEntry | string | undefined): 'open' | 'done' {
+  if (typeof entry === 'string') {
+    return entry.trim().toLowerCase() === 'done' ? 'done' : 'open';
+  }
+
+  const value = String(entry?.state || '').trim().toLowerCase();
+  return value === 'done' ? 'done' : 'open';
+}
+
+function getRoleFromSpaceId(
+  content: CaseContent | undefined,
+  selectedSpaceId: string | undefined
+): CaseRole | undefined {
+  if (!selectedSpaceId) return undefined;
+
+  const roles = content?.roles;
+  if (!roles || typeof roles !== 'object') return undefined;
+
+  const arzt = roles.arzt;
+  if (
+    arzt &&
+    typeof arzt === 'object' &&
+    typeof arzt.space_room_id === 'string' &&
+    arzt.space_room_id === selectedSpaceId
+  ) {
+    return 'arzt';
+  }
+
+  const team = roles.team;
+  if (
+    team &&
+    typeof team === 'object' &&
+    typeof team.space_room_id === 'string' &&
+    team.space_room_id === selectedSpaceId
+  ) {
+    return 'team';
+  }
+
+  return undefined;
+}
+/*** DOBLINGER *** */
+
 type RoomNavItemProps = {
   room: Room;
   selected: boolean;
@@ -220,6 +279,7 @@ type RoomNavItemProps = {
   showAvatar?: boolean;
   direct?: boolean;
 };
+
 export function RoomNavItem({
   room,
   selected,
@@ -237,35 +297,33 @@ export function RoomNavItem({
   const unread = useRoomUnread(room.roomId, roomToUnreadAtom);
   const typingMember = useRoomTypingMember(room.roomId).filter(
     (receipt) => receipt.userId !== mx.getUserId()
-    );
-  // doblinger KIconnect
-  const topic = room.currentState
-    ?.getStateEvents("m.room.topic", "")
-    ?.getContent()?.topic;
-
-  // doblinger KIconnect – Case-Status
-  const caseDone = room.currentState
-    ?.getStateEvents('io.kiconnect.case', '')
-    ?.getContent()?.status === 'done';
-
-  // doblinger erzwingt Re-Render bei Case-State
-  const [, forceUpdate] = useState(0);
-
-  useStateEventCallback(
-    mx,
-    (event) => {
-      if (
-        event.getRoomId() === room.roomId &&
-        event.getType() === 'io.kiconnect.case'
-      ) {
-        forceUpdate((x) => x + 1); // Re-Render erzwingen
-      }
-    }
   );
 
-  // ende
+  /*** DOBLINGER *** */
+  const selectedSpaceId = useSelectedSpace();
 
-  
+  const topic = room.currentState?.getStateEvents('m.room.topic', '')?.getContent()?.topic;
+
+  const caseContent = room.currentState
+    ?.getStateEvents('io.kiconnect.case', '')
+    ?.getContent?.() as CaseContent | undefined;
+
+  const caseRole = getRoleFromSpaceId(caseContent, selectedSpaceId);
+
+  const caseDone = caseRole
+    ? getRoleEntryState(caseContent?.roles?.[caseRole]) === 'done'
+    : false;
+  /*** DOBLINGER *** */
+
+  /*** DOBLINGER *** */
+  const [, forceUpdate] = useState(0);
+
+  useStateEventCallback(mx, (event) => {
+    if (event.getRoomId() === room.roomId && event.getType() === 'io.kiconnect.case') {
+      forceUpdate((x) => x + 1);
+    }
+  });
+  /*** DOBLINGER *** */
 
   const handleContextMenu: MouseEventHandler<HTMLElement> = (evt) => {
     evt.preventDefault();
@@ -322,14 +380,8 @@ export function RoomNavItem({
                 />
               )}
             </Avatar>
-            {/*}
-            <Box as="span" grow="Yes">
-              <Text priority={unread ? '500' : '300'} as="span" size="Inherit" truncate>
-                {room.name}
-              </Text>
-            </Box>
-            ab hier doblinger neu KIconnect
-            */}
+
+            {/*** DOBLINGER *** */}
             <Box
               as="span"
               grow="Yes"
@@ -345,9 +397,9 @@ export function RoomNavItem({
                   size="T300"
                   truncate
                   style={{
-                    color: caseDone ? undefined : '#c0392b',   // offen = rot
-                    fontWeight: caseDone ? undefined : '600', // offen = fett
-                    opacity: caseDone ? 0.4 : 0.9,             // erledigt = grau
+                    color: caseDone ? undefined : '#c0392b',
+                    fontWeight: caseDone ? undefined : '600',
+                    opacity: caseDone ? 0.4 : 0.9,
                     textDecoration: caseDone ? 'line-through' : 'none',
                     lineHeight: '1.2',
                   }}
@@ -356,6 +408,7 @@ export function RoomNavItem({
                 </Text>
               )}
             </Box>
+            {/*** DOBLINGER *** */}
 
             {!optionsVisible && !unread && !selected && typingMember.length > 0 && (
               <Badge size="300" variant="Secondary" fill="Soft" radii="Pill" outlined>
