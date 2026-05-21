@@ -132,7 +132,7 @@ export function useSelectedSpace(): string | undefined {
 
 export function useSpaceLobbySelected(spaceIdOrAlias: string): boolean {
   const match = useMatch({
-    path: getSpaceLobbyPath(spaceIdOrAlias),
+    path: decodeURIComponent(getSpaceLobbyPath(spaceIdOrAlias)),
     caseSensitive: true,
     end: false,
   });
@@ -142,7 +142,7 @@ export function useSpaceLobbySelected(spaceIdOrAlias: string): boolean {
 
 export function useSpaceSearchSelected(spaceIdOrAlias: string): boolean {
   const match = useMatch({
-    path: getSpaceSearchPath(spaceIdOrAlias),
+    path: decodeURIComponent(getSpaceSearchPath(spaceIdOrAlias)),
     caseSensitive: true,
     end: false,
   });

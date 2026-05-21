@@ -222,7 +222,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     const isComposing = useComposingCheck();
 
     useElementSizeObserver(
-      useCallback(() => document.body, []),
+      useCallback(() => fileDropContainerRef.current, [fileDropContainerRef]),
       useCallback((width) => setHideStickerBtn(width < 500), [])
     );
 
