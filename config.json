@@ -1,7 +1,7 @@
 {
   "defaultHomeserver": 0,
   "homeserverList": [
-    "kiconnect.at"
+    "dev.kiconnect.at"
   ],
   "allowCustomHomeservers": true,
   "disableSSO": true,
