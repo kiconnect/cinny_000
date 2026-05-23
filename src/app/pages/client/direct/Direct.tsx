@@ -46,6 +46,7 @@ import { markAsRead } from '../../../utils/notifications';
 import { stopPropagation } from '../../../utils/keyboard';
 import { useSetting } from '../../../state/hooks/settings';
 import { settingsAtom } from '../../../state/settings';
+import { isTeamRoom } from '../../../kiconnect/logic/roomState';
 import {
   getRoomNotificationMode,
   useRoomsNotificationPreferencesContext,
@@ -184,7 +185,17 @@ export function Direct() {
   const [closedCategories, setClosedCategories] = useAtom(useClosedNavCategoriesAtom());
 
   const sortedDirects = useMemo(() => {
-    const items = Array.from(directs).sort(factoryRoomIdByActivity(mx));
+    const byActivity = factoryRoomIdByActivity(mx);
+    const items = Array.from(directs).sort((a, b) => {
+      const aIsTeamRoom = isTeamRoom(mx.getRoom(a));
+      const bIsTeamRoom = isTeamRoom(mx.getRoom(b));
+
+      if (aIsTeamRoom !== bIsTeamRoom) {
+        return aIsTeamRoom ? -1 : 1;
+      }
+
+      return byActivity(a, b);
+    });
     if (closedCategories.has(DEFAULT_CATEGORY_ID)) {
       return items.filter((rId) => roomToUnread.has(rId) || rId === selectedRoomId);
     }
