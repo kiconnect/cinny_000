@@ -26,15 +26,16 @@ export const AuthCard = style({
 export const AuthLogo = style([
   DefaultReset,
   {
-    width: toRem(26),
-    height: toRem(26),
-
-    borderRadius: '50%',
+    width: toRem(72),
+    height: toRem(48),
+    objectFit: 'contain',
+    flexShrink: 0,
   },
 ]);
 
 export const AuthHeader = style({
-  padding: `0 ${config.space.S400}`,
+  minHeight: toRem(72),
+  padding: `${config.space.S100} ${config.space.S400}`,
   borderBottomWidth: config.borderWidth.B300,
 });
 

@@ -9,6 +9,12 @@ export type ClientConfig = {
   defaultHomeserver?: number;
   homeserverList?: string[];
   allowCustomHomeservers?: boolean;
+  hidePasswordLogin?: boolean;
+  keycloakLogout?: {
+    issuer?: string;
+    clientId?: string;
+    postLogoutRedirectUri?: string;
+  };
 
   featuredCommunities?: {
     openAsDefault?: boolean;

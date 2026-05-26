@@ -6,12 +6,27 @@ Ziel Produktivumgebung:
 - Matrix-Base-URL per well-known: https://matrix.kiconnect.at
 - Keycloak/SSO: https://sso.id-am.at/realms/KIconnect
 
-Vor dem Kompilieren fuer Produktion pruefen/aendern:
+Vor dem Kompilieren fuer Produktion nicht manuell an config.json drehen, sondern den passenden Build-Befehl verwenden:
+
+Dev:
+
+npm run build:dev
+
+Prod:
+
+npm run build:prod
+
+Diese Befehle kopieren automatisch config.dev.json oder config.prod.json nach config.json und bauen danach dist/.
+
+Vor Produktivdeployment trotzdem kurz pruefen:
 
 1. config.json
 
-Datei:
-config.json
+Quelle fuer Dev:
+config.dev.json
+
+Quelle fuer Prod:
+config.prod.json
 
 Produktiv muss dort stehen:
 
@@ -23,26 +38,32 @@ Produktiv muss dort stehen:
   ...
 }
 
-Fuer Dev steht hier aktuell:
+Fuer Dev steht in config.dev.json:
 
 "dev.kiconnect.at"
 
-Das muss vor einem Produktiv-Build wieder auf "kiconnect.at" geaendert werden.
+Der Produktiv-Build setzt das automatisch auf "kiconnect.at".
 
-2. Keycloak-Logout im Code
+2. Keycloak-Logout in config.json
 
 Datei:
-src/app/kiconnect/logic/logout.ts
+config.prod.json
 
 Produktiv muss dort stehen:
 
-const KC_REALM_ISSUER = "https://sso.id-am.at/realms/KIconnect";
-const KC_CLIENT_ID = "kiconnect_cinny";
+  "keycloakLogout": {
+    "issuer": "https://sso.id-am.at/realms/KIconnect",
+    "clientId": "kiconnect_cinny"
+  }
 
-Wenn dort devsso.id-am.at steht, ist es noch auf Dev gestellt.
+Fuer Dev steht in config.dev.json:
 
-Hinweis:
-Diese Stelle ist aktuell hart im Code. Sie wird nicht aus config.json oder .env gelesen.
+  "keycloakLogout": {
+    "issuer": "https://devsso.id-am.at/realms/KIconnect",
+    "clientId": "kiconnect_cinny"
+  }
+
+Der Code liest diese Werte zur Laufzeit aus config.json. Die Build-Skripte erzeugen diese Datei aus der jeweiligen Umgebungsvorlage.
 
 3. dist/config.json nicht als Quelle verwenden
 
@@ -58,6 +79,7 @@ Im Produktiv-Keycloak Realm KIconnect muss der Client kiconnect_cinny zu der pro
 Typische Werte:
 - Client ID: kiconnect_cinny
 - Valid Redirect URIs: die produktive Cinny-URL, je nach Hosting z.B. https://cinny.kiconnect.at/*
+- Valid Post Logout Redirect URIs: + oder die produktive Cinny-URL
 - Web Origins: die produktive Cinny-Origin, z.B. https://cinny.kiconnect.at
 
 5. Matrix well-known pruefen
@@ -81,4 +103,3 @@ npm run build
 Danach liegt die auslieferbare Version in:
 
 dist/
-

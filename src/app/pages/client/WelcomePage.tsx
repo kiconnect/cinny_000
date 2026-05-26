@@ -1,7 +1,7 @@
 import React from 'react';
 import { Box, Button, Icon, Icons, Text, config, toRem } from 'folds';
 import { Page, PageHero, PageHeroSection } from '../../components/page';
-import CinnySVG from '../../../../public/res/svg/cinny.svg';
+import KIconnectLogo from '../../assets/ICON_1_3_2026_bkg_leer.png';
 
 export function WelcomePage() {
   return (
@@ -14,17 +14,25 @@ export function WelcomePage() {
       >
         <PageHeroSection>
           <PageHero
-            icon={<img width="70" height="70" src={CinnySVG} alt="Cinny Logo" />}
-            title="Welcome to Cinny"
+            icon={
+              <img
+                width="90"
+                height="60"
+                src={KIconnectLogo}
+                alt="KIconnect Logo"
+                style={{ objectFit: 'contain' }}
+              />
+            }
+            title="KIconnect Chat"
             subTitle={
               <span>
-                Yet another matrix client.{' '}
+                KIconnect Chat basiert auf Cinny.{' '}
                 <a
                   href="https://github.com/cinnyapp/cinny/releases"
                   target="_blank"
                   rel="noreferrer noopener"
                 >
-                  v4.12.1
+                  Cinny v4.12.1
                 </a>
               </span>
             }
@@ -39,19 +47,19 @@ export function WelcomePage() {
                   before={<Icon size="200" src={Icons.Code} />}
                 >
                   <Text as="span" size="B400" truncate>
-                    Source Code
+                    Cinny Source Code
                   </Text>
                 </Button>
                 <Button
                   as="a"
-                  href="https://cinny.in/#sponsor"
+                  href="https://portal.kiconnect.at/legal/Impressum-Datenschutz"
                   target="_blank"
                   rel="noreferrer noopener"
                   fill="Soft"
-                  before={<Icon size="200" src={Icons.Heart} />}
+                  before={<Icon size="200" src={Icons.Info} />}
                 >
                   <Text as="span" size="B400" truncate>
-                    Support
+                    Impressum & Datenschutz
                   </Text>
                 </Button>
               </Box>

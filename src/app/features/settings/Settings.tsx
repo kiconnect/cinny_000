@@ -85,7 +85,7 @@ const useSettingsMenuItems = (): SettingsMenuItem[] =>
       },
       {
         page: SettingsPages.AboutPage,
-        name: 'About',
+        name: 'Info',
         icon: Icons.Info,
       },
     ],

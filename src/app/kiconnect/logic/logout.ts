@@ -1,12 +1,31 @@
 import type { MatrixClient } from "matrix-js-sdk";
 
-const KC_REALM_ISSUER = "https://sso.id-am.at/realms/KIconnect";
-const KC_CLIENT_ID = "kiconnect_cinny";
+type KeycloakLogoutConfig = {
+  issuer?: string;
+  clientId?: string;
+  postLogoutRedirectUri?: string;
+};
 
-function buildKeycloakLogoutUrl(): string {
-  const postLogoutRedirect = `${window.location.origin}/`;
-  const url = new URL(`${KC_REALM_ISSUER}/protocol/openid-connect/logout`);
-  url.searchParams.set("client_id", KC_CLIENT_ID);
+async function getKeycloakLogoutConfig(): Promise<KeycloakLogoutConfig> {
+  try {
+    const response = await fetch(`${import.meta.env.BASE_URL.replace(/\/$/, "")}/config.json`, {
+      cache: "no-store",
+    });
+    if (!response.ok) return {};
+    const config = await response.json();
+    return config?.keycloakLogout ?? {};
+  } catch {
+    return {};
+  }
+}
+
+async function buildKeycloakLogoutUrl(): Promise<string> {
+  const config = await getKeycloakLogoutConfig();
+  const issuer = config.issuer ?? "https://sso.id-am.at/realms/KIconnect";
+  const clientId = config.clientId ?? "kiconnect_cinny";
+  const postLogoutRedirect = config.postLogoutRedirectUri ?? `${window.location.origin}/`;
+  const url = new URL(`${issuer}/protocol/openid-connect/logout`);
+  url.searchParams.set("client_id", clientId);
   url.searchParams.set("post_logout_redirect_uri", postLogoutRedirect);
   return url.toString();
 }
@@ -82,5 +101,5 @@ export async function clientLogout(mx: MatrixClient): Promise<void> {
   } catch {}
 
   // 4) Keycloak SSO logout -> zurück zur App
-  window.location.assign(buildKeycloakLogoutUrl());
+  window.location.assign(await buildKeycloakLogoutUrl());
 }

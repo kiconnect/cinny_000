@@ -4,7 +4,7 @@ import { Page, PageContent, PageHeader } from '../../../components/page';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle } from '../styles.css';
 import { SettingTile } from '../../../components/setting-tile';
-import CinnySVG from '../../../../../public/res/svg/cinny.svg';
+import KIconnectLogo from '../../../assets/ICON_1_3_2026_bkg_leer.png';
 import { clearCacheAndReload } from '../../../../client/initMatrix';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 
@@ -20,7 +20,7 @@ export function About({ requestClose }: AboutProps) {
         <Box grow="Yes" gap="200">
           <Box grow="Yes" alignItems="Center" gap="200">
             <Text size="H3" truncate>
-              About
+              Info
             </Text>
           </Box>
           <Box shrink="No">
@@ -37,18 +37,20 @@ export function About({ requestClose }: AboutProps) {
               <Box gap="400">
                 <Box shrink="No">
                   <img
-                    style={{ width: toRem(60), height: toRem(60) }}
-                    src={CinnySVG}
-                    alt="Cinny logo"
+                    style={{ width: toRem(84), height: toRem(60), objectFit: 'contain' }}
+                    src={KIconnectLogo}
+                    alt="KIconnect Logo"
                   />
                 </Box>
                 <Box direction="Column" gap="300">
                   <Box direction="Column" gap="100">
                     <Box gap="100" alignItems="End">
-                      <Text size="H3">Cinny</Text>
-                      <Text size="T200">v4.12.1</Text>
+                      <Text size="H3">KIconnect Chat</Text>
+                      <Text size="T200">powered by Cinny v4.12.1</Text>
                     </Box>
-                    <Text>Yet another matrix client.</Text>
+                    <Text>
+                      KIconnect Chat ist ein angepasster Matrix-Client auf Basis von Cinny.
+                    </Text>
                   </Box>
 
                   <Box gap="200" wrap="Wrap">
@@ -63,20 +65,20 @@ export function About({ requestClose }: AboutProps) {
                       radii="300"
                       before={<Icon src={Icons.Code} size="100" filled />}
                     >
-                      <Text size="B300">Source Code</Text>
+                      <Text size="B300">Cinny Source Code</Text>
                     </Button>
                     <Button
                       as="a"
-                      href="https://cinny.in/#sponsor"
+                      href="https://portal.kiconnect.at/legal/Impressum-Datenschutz"
                       rel="noreferrer noopener"
                       target="_blank"
-                      variant="Critical"
+                      variant="Secondary"
                       fill="Soft"
                       size="300"
                       radii="300"
-                      before={<Icon src={Icons.Heart} size="100" filled />}
+                      before={<Icon src={Icons.Info} size="100" filled />}
                     >
-                      <Text size="B300">Support</Text>
+                      <Text size="B300">Impressum & Datenschutz</Text>
                     </Button>
                   </Box>
                 </Box>
@@ -124,6 +126,19 @@ export function About({ requestClose }: AboutProps) {
                       paddingLeft: config.space.S400,
                     }}
                   >
+                    <li>
+                      <Text size="T300">
+                        KIconnect Chat is based on{' '}
+                        <a
+                          href="https://github.com/cinnyapp/cinny"
+                          rel="noreferrer noopener"
+                          target="_blank"
+                        >
+                          Cinny
+                        </a>
+                        , an open-source Matrix client licensed under AGPL-3.0.
+                      </Text>
+                    </li>
                     <li>
                       <Text size="T300">
                         The{' '}

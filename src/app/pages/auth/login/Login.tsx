@@ -36,7 +36,7 @@ const useLoginSearchParams = (searchParams: URLSearchParams): LoginPathSearchPar
 
 export function Login() {
   const server = useAuthServer();
-  const { hashRouter } = useClientConfig();
+  const { hashRouter, hidePasswordLogin } = useClientConfig();
   const { loginFlows } = useAuthFlows();
   const [searchParams] = useSearchParams();
   const loginSearchParams = useLoginSearchParams(searchParams);
@@ -62,7 +62,7 @@ export function Login() {
       {parsedFlows.token && loginSearchParams.loginToken && (
         <TokenLogin token={loginSearchParams.loginToken} />
       )}
-      {parsedFlows.password && (
+      {parsedFlows.password && !hidePasswordLogin && (
         <>
           <PasswordLoginForm
             defaultUsername={loginSearchParams.username}
@@ -78,12 +78,12 @@ export function Login() {
             providers={parsedFlows.sso.identity_providers}
             redirectUrl={ssoRedirectUrl}
             action={SSOAction.LOGIN}
-            saveScreenSpace={parsedFlows.password !== undefined}
+            saveScreenSpace={parsedFlows.password !== undefined && !hidePasswordLogin}
           />
           <span data-spacing-node />
         </>
       )}
-      {!parsedFlows.password && !parsedFlows.sso && (
+      {(!parsedFlows.password || hidePasswordLogin) && !parsedFlows.sso && (
         <>
           <Text style={{ color: color.Critical.Main }}>
             {`This client does not support login on "${server}" homeserver. Password and SSO based login method not found.`}
@@ -91,9 +91,11 @@ export function Login() {
           <span data-spacing-node />
         </>
       )}
-      <Text align="Center">
-        Do not have an account? <Link to={getRegisterPath(server)}>Register</Link>
-      </Text>
+      {!hidePasswordLogin && (
+        <Text align="Center">
+          Do not have an account? <Link to={getRegisterPath(server)}>Register</Link>
+        </Text>
+      )}
     </Box>
   );
 }

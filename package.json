@@ -1,7 +1,7 @@
 {
   "name": "cinny",
   "version": "4.12.1",
-  "description": "Yet another matrix client",
+  "description": "KIconnect Chat, a Matrix client based on Cinny",
   "main": "index.js",
   "type": "module",
   "engines": {
@@ -10,6 +10,10 @@
   "scripts": {
     "start": "vite",
     "build": "vite build",
+    "build:dev": "node scripts/use-config.js dev && vite build",
+    "build:prod": "node scripts/use-config.js prod && vite build",
+    "config:dev": "node scripts/use-config.js dev",
+    "config:prod": "node scripts/use-config.js prod",
     "preview": "vite preview",
     "lint": "npm run check:eslint && npm run check:prettier",
     "check:eslint": "eslint src/*",

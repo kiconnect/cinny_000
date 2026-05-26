@@ -20,3 +20,20 @@ export function isTeamRoom(room: Room | undefined): boolean {
 export function isPatientRoom(room: Room | undefined): boolean {
   return getRoomKind(room) === "patient";
 }
+
+export function getRoomOwner(room: Room | undefined): string | undefined {
+  if (!room?.currentState) return undefined;
+
+  const ev = room.currentState.getStateEvents(ROOM_KIND_STATE_TYPE, ROOM_KIND_STATE_KEY);
+  const owner = ev?.getContent?.()?.owner;
+
+  return typeof owner === "string" && owner ? owner : undefined;
+}
+
+export function isOwnedTeamRoom(
+  room: Room | undefined,
+  userId: string | null | undefined
+): boolean {
+  if (!userId || getRoomKind(room) !== "team") return false;
+  return getRoomOwner(room) === userId;
+}

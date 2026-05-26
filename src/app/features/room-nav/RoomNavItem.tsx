@@ -63,6 +63,7 @@ import { useAutoDiscoveryInfo } from '../../hooks/useAutoDiscoveryInfo';
 import { livekitSupport } from '../../hooks/useLivekitSupport';
 import { StateEvent } from '../../../types/matrix/room';
 import { webRTCSupported } from '../../utils/rtc';
+import { isOwnedTeamRoom } from '../../kiconnect/logic/roomState';
 
 type RoomNavItemMenuProps = {
   room: Room;
@@ -337,11 +338,15 @@ export function RoomNavItem({
   const caseDone = caseRole
     ? getRoleEntryState(caseContent?.roles?.[caseRole]) === 'done'
     : false;
+  const ownTeamRoom = isOwnedTeamRoom(room, mx.getUserId());
 
   const [, forceUpdate] = useState(0);
 
   useStateEventCallback(mx, (event) => {
-    if (event.getRoomId() === room.roomId && event.getType() === 'io.kiconnect.case') {
+    if (
+      event.getRoomId() === room.roomId &&
+      (event.getType() === 'io.kiconnect.case' || event.getType() === 'io.kiconnect.room')
+    ) {
       forceUpdate((x) => x + 1);
     }
   });
@@ -442,11 +447,28 @@ export function RoomNavItem({
             <Box
               as="span"
               grow="Yes"
-              style={{ display: 'flex', flexDirection: 'column' }}
+              style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}
             >
-              <Text priority={unread ? '500' : '300'} as="span" size="Inherit" truncate>
-                {roomName}
-              </Text>
+              <Box as="span" alignItems="Center" gap="100" style={{ minWidth: 0 }}>
+                {ownTeamRoom && (
+                  <Icon
+                    size="50"
+                    src={Icons.User}
+                    filled
+                    aria-label="Mein Teamraum"
+                    style={{ color: '#1E7F93', flexShrink: 0 }}
+                  />
+                )}
+                <Text
+                  priority={unread ? '500' : '300'}
+                  as="span"
+                  size="Inherit"
+                  truncate
+                  title={ownTeamRoom ? 'Mein Teamraum' : undefined}
+                >
+                  {roomName}
+                </Text>
+              </Box>
 
               {topic && (
                 <Text

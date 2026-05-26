@@ -1,13 +1,13 @@
 {
   "defaultHomeserver": 0,
   "homeserverList": [
-    "dev.kiconnect.at"
+    "kiconnect.at"
   ],
-  "allowCustomHomeservers": true,
+  "allowCustomHomeservers": false,
   "disableSSO": true,
   "hidePasswordLogin": true,
   "keycloakLogout": {
-    "issuer": "https://devsso.id-am.at/realms/KIconnect",
+    "issuer": "https://sso.id-am.at/realms/KIconnect",
     "clientId": "kiconnect_cinny"
   },
 

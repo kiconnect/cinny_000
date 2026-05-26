@@ -65,7 +65,9 @@ import {
 import { UseStateProvider } from '../../../components/UseStateProvider';
 import { JoinAddressPrompt } from '../../../components/join-address-prompt';
 import { _RoomSearchParams } from '../../paths';
-import kiconnectIcon from '../../../assets/kiconnect-icon.png';
+import kiconnectIcon from '../../../assets/ICON_1_3_2026_bkg_leer.png';
+import { isOwnedTeamRoom } from '../../../kiconnect/logic/roomState';
+import { useStateEventCallback } from '../../../hooks/useStateEventCallback';
 
 type HomeMenuProps = {
   requestClose: () => void;
@@ -125,7 +127,7 @@ function HomeHeader() {
               fontWeight: 400,
             }}
           >
-              KI connect
+              KIconnect
             </Text>
           </Box>
           <Box>
@@ -216,6 +218,14 @@ export function Home() {
   const searchSelected = useHomeSearchSelected();
   const noRoomToDisplay = rooms.length === 0;
   const [closedCategories, setClosedCategories] = useAtom(useClosedNavCategoriesAtom());
+  const currentUserId = mx.getUserId();
+  const [roomStateVersion, setRoomStateVersion] = useState(0);
+
+  useStateEventCallback(mx, (event) => {
+    if (event.getType() === 'io.kiconnect.room') {
+      setRoomStateVersion((version) => version + 1);
+    }
+  });
 
   const sortedRooms = useMemo(() => {
     const items = Array.from(rooms).sort(
@@ -223,11 +233,20 @@ export function Home() {
         ? factoryRoomIdByActivity(mx)
         : factoryRoomIdByAtoZ(mx)
     );
+    const pinnedRooms = items.filter((rId) => isOwnedTeamRoom(mx.getRoom(rId), currentUserId));
+    const otherRooms = items.filter((rId) => !isOwnedTeamRoom(mx.getRoom(rId), currentUserId));
+    const sortedItems = [...pinnedRooms, ...otherRooms];
+
     if (closedCategories.has(DEFAULT_CATEGORY_ID)) {
-      return items.filter((rId) => roomToUnread.has(rId) || rId === selectedRoomId);
+      return sortedItems.filter(
+        (rId) =>
+          isOwnedTeamRoom(mx.getRoom(rId), currentUserId) ||
+          roomToUnread.has(rId) ||
+          rId === selectedRoomId
+      );
     }
-    return items;
-  }, [mx, rooms, closedCategories, roomToUnread, selectedRoomId]);
+    return sortedItems;
+  }, [mx, rooms, closedCategories, roomToUnread, selectedRoomId, currentUserId, roomStateVersion]);
 
   const virtualizer = useVirtualizer({
     count: sortedRooms.length,
