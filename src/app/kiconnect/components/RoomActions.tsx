@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import type { Room } from "matrix-js-sdk/src/matrix";
+import type { MatrixClient } from "matrix-js-sdk";
 import { useMatrixClient } from "../../hooks/useMatrixClient";
 import { useSelectedSpace } from "../../hooks/router/useSelectedSpace";
 
@@ -73,10 +74,46 @@ function getRoleFromSpaceId(
   return undefined;
 }
 
+function getRoleFromCurrentUser(
+  mx: MatrixClient,
+  content: CaseContent | undefined
+): CaseRole | undefined {
+  const roles = content?.roles;
+  if (!roles || typeof roles !== "object") return undefined;
+
+  for (const role of ["arzt", "team"] as const) {
+    const entry = roles[role];
+    if (!entry || typeof entry !== "object") continue;
+
+    const spaceRoomId = entry.space_room_id;
+    if (typeof spaceRoomId !== "string" || !spaceRoomId) continue;
+
+    const membership = mx.getRoom(spaceRoomId)?.getMyMembership?.();
+    if (membership === "join" || membership === "invite") {
+      return role;
+    }
+  }
+
+  return undefined;
+}
+
 function getOtherRole(role: CaseRole | undefined): CaseRole | undefined {
   if (role === "arzt") return "team";
   if (role === "team") return "arzt";
   return undefined;
+}
+
+function getRoleSpaceRoomId(
+  content: CaseContent | undefined,
+  role: CaseRole | undefined
+): string | undefined {
+  if (!role) return undefined;
+
+  const entry = content?.roles?.[role];
+  if (!entry || typeof entry !== "object") return undefined;
+
+  const spaceRoomId = entry.space_room_id;
+  return typeof spaceRoomId === "string" && spaceRoomId.trim() ? spaceRoomId.trim() : undefined;
 }
 
 function getCaseContent(room: Room): CaseContent | undefined {
@@ -85,12 +122,14 @@ function getCaseContent(room: Room): CaseContent | undefined {
 }
 
 function getOwnRoleStatus(
+  mx: MatrixClient,
   room: Room,
   selectedSpaceId: string | undefined
-): { role?: CaseRole; own: CaseStatus; other: CaseStatus } {
+): { role?: CaseRole; own: CaseStatus; other: CaseStatus; spaceRoomId?: string } {
   const content = getCaseContent(room);
-  const role = getRoleFromSpaceId(content, selectedSpaceId);
+  const role = getRoleFromSpaceId(content, selectedSpaceId) || getRoleFromCurrentUser(mx, content);
   const otherRole = getOtherRole(role);
+  const spaceRoomId = selectedSpaceId?.trim() || getRoleSpaceRoomId(content, role);
 
   if (!role || !otherRole) {
     return { role: undefined, own: "done", other: "done" };
@@ -100,6 +139,7 @@ function getOwnRoleStatus(
     role,
     own: getRoleEntryState(content?.roles?.[role]),
     other: getRoleEntryState(content?.roles?.[otherRole]),
+    spaceRoomId,
   };
 }
 
@@ -133,16 +173,14 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
   const [err, setErr] = useState<string | null>(null);
 
   const teamRoom = useMemo(() => isTeamRoom(room), [room]);
-  const caseInfo = getOwnRoleStatus(room, selectedSpaceId);
+  const caseInfo = getOwnRoleStatus(mx, room, selectedSpaceId);
 
   const erledigtLabel = caseInfo.own === "done" ? "Wieder öffnen" : "Erledigt";
 
   const canForward =
     !!caseInfo.role &&
-    (
-      (caseInfo.own === "open" && caseInfo.other === "done") ||
-      (caseInfo.own === "done" && caseInfo.other === "open")
-    );
+    caseInfo.own === "open" &&
+    caseInfo.other === "done";
 
   const forwardLabel =
     caseInfo.own === "done" && caseInfo.other === "open"
@@ -187,7 +225,7 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
     setErr(null);
 
     try {
-      const spaceRoomId = selectedSpaceId?.trim();
+      const spaceRoomId = caseInfo.spaceRoomId?.trim();
 
       if (!isUsableSpaceId(spaceRoomId)) {
         throw new Error("Keine gültige User-Space-ID verfügbar.");
@@ -222,7 +260,7 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
     setErr(null);
 
     try {
-      const spaceRoomId = selectedSpaceId?.trim();
+      const spaceRoomId = caseInfo.spaceRoomId?.trim();
       console.log("[FORWARD] spaceRoomId", spaceRoomId);
 
       if (!isUsableSpaceId(spaceRoomId)) {

@@ -1,5 +1,5 @@
 import React, { MouseEventHandler, forwardRef, useState } from 'react';
-import { Room } from 'matrix-js-sdk';
+import { MatrixClient, Room } from 'matrix-js-sdk';
 import {
   Avatar,
   Box,
@@ -278,6 +278,29 @@ function getRoleFromSpaceId(
   return undefined;
 }
 
+function getRoleFromCurrentUser(
+  mx: MatrixClient,
+  content: CaseContent | undefined
+): CaseRole | undefined {
+  const roles = content?.roles;
+  if (!roles || typeof roles !== 'object') return undefined;
+
+  for (const role of ['arzt', 'team'] as const) {
+    const entry = roles[role];
+    if (!entry || typeof entry !== 'object') continue;
+
+    const spaceRoomId = entry.space_room_id;
+    if (typeof spaceRoomId !== 'string' || !spaceRoomId) continue;
+
+    const membership = mx.getRoom(spaceRoomId)?.getMyMembership?.();
+    if (membership === 'join' || membership === 'invite') {
+      return role;
+    }
+  }
+
+  return undefined;
+}
+
 function CallChatToggle() {
   const [chat, setChat] = useAtom(callChatAtom);
 
@@ -333,7 +356,7 @@ export function RoomNavItem({
     ?.getStateEvents('io.kiconnect.case', '')
     ?.getContent?.() as CaseContent | undefined;
 
-  const caseRole = getRoleFromSpaceId(caseContent, selectedSpaceId);
+  const caseRole = getRoleFromSpaceId(caseContent, selectedSpaceId) || getRoleFromCurrentUser(mx, caseContent);
 
   const caseDone = caseRole
     ? getRoleEntryState(caseContent?.roles?.[caseRole]) === 'done'
