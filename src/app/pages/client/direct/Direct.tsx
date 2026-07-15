@@ -104,7 +104,7 @@ function DirectHeader() {
         <Box alignItems="Center" grow="Yes" gap="300">
           <Box grow="Yes">
             <Text size="H4" truncate>
-              Direct Messages
+              Inbox
             </Text>
           </Box>
           <Box>
@@ -205,7 +205,7 @@ export function Direct() {
   const virtualizer = useVirtualizer({
     count: sortedDirects.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => 38,
+    estimateSize: () => 62,
     overscan: 10,
   });
 
@@ -214,7 +214,7 @@ export function Direct() {
   );
 
   return (
-    <PageNav>
+    <PageNav size="500">
       <DirectHeader />
       {noRoomToDisplay ? (
         <DirectEmpty />
@@ -246,7 +246,7 @@ export function Direct() {
                   data-category-id={DEFAULT_CATEGORY_ID}
                   onClick={handleCategoryClick}
                 >
-                  Chats
+                  Inbox
                 </RoomNavCategoryButton>
               </NavCategoryHeader>
               <div

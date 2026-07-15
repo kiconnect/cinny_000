@@ -1,5 +1,5 @@
-import React, { MouseEventHandler, forwardRef, useState } from 'react';
-import { MatrixClient, Room } from 'matrix-js-sdk';
+import React, { MouseEventHandler, forwardRef, useEffect, useState } from 'react';
+import { MatrixClient, Room, RoomEvent } from 'matrix-js-sdk';
 import {
   Avatar,
   Box,
@@ -64,6 +64,7 @@ import { livekitSupport } from '../../hooks/useLivekitSupport';
 import { StateEvent } from '../../../types/matrix/room';
 import { webRTCSupported } from '../../utils/rtc';
 import { isOwnedTeamRoom, isPatientRoom } from '../../kiconnect/logic/roomState';
+import { timeHourMinute, today, yesterday } from '../../utils/time';
 
 type RoomNavItemMenuProps = {
   room: Room;
@@ -255,6 +256,40 @@ function isCaseFullyDone(content: CaseContent | undefined): boolean {
   );
 }
 
+function getMessagePreview(room: Room): { body: string; ts: number } | undefined {
+  const events = room.getLiveTimeline().getEvents();
+
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    if (event.getType() !== 'm.room.message' || event.isRedacted()) continue;
+
+    const content = event.getContent();
+    const body = typeof content.body === 'string' ? content.body.replace(/\s+/g, ' ').trim() : '';
+    const fallback =
+      content.msgtype === 'm.image'
+        ? 'Bild'
+        : content.msgtype === 'm.file'
+          ? 'Datei'
+          : content.msgtype === 'm.audio'
+            ? 'Audionachricht'
+            : content.msgtype === 'm.video'
+              ? 'Video'
+              : '';
+
+    if (body || fallback) {
+      return { body: body || fallback, ts: event.getTs() };
+    }
+  }
+
+  return undefined;
+}
+
+function formatMessageTimestamp(ts: number): string {
+  if (today(ts)) return timeHourMinute(ts, true);
+  if (yesterday(ts)) return 'Gestern';
+  return new Intl.DateTimeFormat('de-AT', { day: '2-digit', month: '2-digit' }).format(ts);
+}
+
 function getRoleFromSpaceId(
   content: CaseContent | undefined,
   selectedSpaceId: string | undefined
@@ -360,6 +395,8 @@ export function RoomNavItem({
   const selectedSpaceId = useSelectedSpace();
 
   const topic = room.currentState?.getStateEvents('m.room.topic', '')?.getContent()?.topic;
+  const subject = typeof topic === 'string' && topic.trim() ? topic.trim() : 'Kein Betreff';
+  const messagePreview = getMessagePreview(room);
 
   const caseContent = room.currentState
     ?.getStateEvents('io.kiconnect.case', '')
@@ -373,6 +410,12 @@ export function RoomNavItem({
   const ownTeamRoom = isOwnedTeamRoom(room, mx.getUserId());
 
   const [, forceUpdate] = useState(0);
+
+  useEffect(() => {
+    const handleTimeline = () => forceUpdate((x) => x + 1);
+    room.on(RoomEvent.Timeline, handleTimeline);
+    return () => room.off(RoomEvent.Timeline, handleTimeline);
+  }, [room]);
 
   useStateEventCallback(mx, (event) => {
     if (
@@ -494,44 +537,62 @@ export function RoomNavItem({
                 <Text
                   priority={unread ? '500' : '300'}
                   as="span"
-                  size="Inherit"
+                  size="T500"
                   truncate
+                  style={{ fontWeight: config.fontWeight.W700 }}
                   title={ownTeamRoom ? 'Mein Teamraum' : undefined}
                 >
                   {roomName}
                 </Text>
+                {messagePreview && (
+                  <Text
+                    as="time"
+                    size="T200"
+                    priority="300"
+                    style={{ flexShrink: 0, marginLeft: 'auto' }}
+                  >
+                    {formatMessageTimestamp(messagePreview.ts)}
+                  </Text>
+                )}
               </Box>
 
-              {topic && (
-                <Text
-                  as="span"
-                  size="T300"
-                  truncate
-                  style={{
-                    color: caseDone ? undefined : '#c0392b',
-                    fontWeight: caseDone ? undefined : '600',
-                    opacity: caseDone ? 0.4 : 0.9,
-                    textDecoration: caseDone ? 'line-through' : 'none',
-                    lineHeight: '1.2',
-                  }}
-                >
-                  {topic}
-                </Text>
-              )}
+              <Text
+                as="span"
+                size="T400"
+                truncate
+                style={{
+                  color: caseDone ? undefined : '#c0392b',
+                  fontWeight: caseDone ? undefined : '600',
+                  opacity: caseDone ? 0.4 : 0.9,
+                  textDecoration: caseDone ? 'line-through' : 'none',
+                  lineHeight: '1.2',
+                }}
+              >
+                {subject}
+              </Text>
+              <Text
+                as="span"
+                size="T400"
+                priority="300"
+                truncate
+                style={{ lineHeight: '1.2', opacity: caseDone ? 0.45 : 0.75 }}
+              >
+                {messagePreview?.body || 'Noch keine Nachricht'}
+              </Text>
             </Box>
             {/*** DOBLINGER *** */}
 
-            {!optionsVisible && !unread && !selected && typingMember.length > 0 && (
+            {!unread && !selected && typingMember.length > 0 && (
               <Badge size="300" variant="Secondary" fill="Soft" radii="Pill" outlined>
                 <TypingIndicator size="300" disableAnimation />
               </Badge>
             )}
-            {!optionsVisible && unread && (
+            {unread && (
               <UnreadBadgeCenter>
                 <UnreadBadge highlight={unread.highlight > 0} count={unread.total} />
               </UnreadBadgeCenter>
             )}
-            {!optionsVisible && notificationMode !== RoomNotificationMode.Unset && (
+            {notificationMode !== RoomNotificationMode.Unset && (
               <Icon
                 size="50"
                 src={getRoomNotificationModeIcon(notificationMode)}
@@ -548,54 +609,6 @@ export function RoomNavItem({
           </Box>
         </NavItemContent>
       </NavLink>
-      {optionsVisible && (
-        <NavItemOptions>
-          {selected && (callEmbed?.roomId === room.roomId || room.isCallRoom()) && (
-            <CallChatToggle />
-          )}
-          <PopOut
-            id={`menu-${room.roomId}`}
-            aria-expanded={!!menuAnchor}
-            anchor={menuAnchor}
-            offset={menuAnchor?.width === 0 ? 0 : undefined}
-            alignOffset={menuAnchor?.width === 0 ? 0 : -5}
-            position="Bottom"
-            align={menuAnchor?.width === 0 ? 'Start' : 'End'}
-            content={
-              <FocusTrap
-                focusTrapOptions={{
-                  initialFocus: false,
-                  returnFocusOnDeactivate: false,
-                  onDeactivate: () => setMenuAnchor(undefined),
-                  clickOutsideDeactivates: true,
-                  isKeyForward: (evt: KeyboardEvent) => evt.key === 'ArrowDown',
-                  isKeyBackward: (evt: KeyboardEvent) => evt.key === 'ArrowUp',
-                  escapeDeactivates: stopPropagation,
-                }}
-              >
-                <RoomNavItemMenu
-                  room={room}
-                  requestClose={() => setMenuAnchor(undefined)}
-                  notificationMode={notificationMode}
-                />
-              </FocusTrap>
-            }
-          >
-            <IconButton
-              onClick={handleOpenMenu}
-              aria-pressed={!!menuAnchor}
-              aria-controls={`menu-${room.roomId}`}
-              aria-label="More Options"
-              variant="Background"
-              fill="None"
-              size="300"
-              radii="300"
-            >
-              <Icon size="50" src={Icons.VerticalDots} />
-            </IconButton>
-          </PopOut>
-        </NavItemOptions>
-      )}
     </NavItem>
   );
 }

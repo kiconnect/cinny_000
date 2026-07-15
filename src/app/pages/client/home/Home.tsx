@@ -260,7 +260,7 @@ export function Home() {
   );
 
   return (
-    <PageNav>
+    <PageNav size="500">
       <HomeHeader />
       {noRoomToDisplay ? (
         <HomeEmpty />
@@ -349,7 +349,7 @@ export function Home() {
                   data-category-id={DEFAULT_CATEGORY_ID}
                   onClick={handleCategoryClick}
                 >
-                  Rooms
+                  Inbox
                 </RoomNavCategoryButton>
               </NavCategoryHeader>
               <div

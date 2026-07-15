@@ -77,7 +77,7 @@ const defaultSettings: Settings = {
   showNotifications: true,
   isNotificationSounds: true,
 
-  hour24Clock: false,
+  hour24Clock: true,
   dateFormatString: 'D MMM YYYY',
 
   developerTools: false,
@@ -89,6 +89,7 @@ export const getSettings = () => {
   return {
     ...defaultSettings,
     ...(JSON.parse(settings) as Settings),
+    hour24Clock: true,
   };
 };
 
@@ -100,7 +101,8 @@ const baseSettings = atom<Settings>(getSettings());
 export const settingsAtom = atom<Settings, [Settings], undefined>(
   (get) => get(baseSettings),
   (get, set, update) => {
-    set(baseSettings, update);
-    setSettings(update);
+    const normalized = { ...update, hour24Clock: true };
+    set(baseSettings, normalized);
+    setSettings(normalized);
   }
 );

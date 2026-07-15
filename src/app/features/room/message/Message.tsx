@@ -740,6 +740,9 @@ export const Message = as<'div', MessageProps>(
       : undefined;
 
     const usernameColor = legacyUsernameColor ? colorMXID(senderId) : tagColor;
+    const senderLocalpart = senderId.split(':', 1)[0].toLowerCase();
+    const isTeamSender = senderLocalpart.startsWith('@z') || senderLocalpart.startsWith('@bot');
+    const avatarBackground = isTeamSender ? '#278f9d' : '#9aa6a9';
 
     const headerJSX = !collapse && (
       <Box
@@ -807,6 +810,7 @@ export const Message = as<'div', MessageProps>(
                 : undefined
             }
             alt={senderDisplayName}
+            fallbackStyle={{ backgroundColor: avatarBackground }}
             renderFallback={() => <Icon size="200" src={Icons.User} filled />}
           />
         </Avatar>

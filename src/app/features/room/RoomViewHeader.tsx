@@ -411,11 +411,10 @@ export function RoomViewHeader({ callView }: { callView?: boolean }) {
   const avatarMxc = useRoomAvatar(room, direct);
   const name = useRoomName(room);
   const topic = useRoomTopic(room);
+  const subject = topic?.trim() || 'Kein Betreff';
   const avatarUrl = avatarMxc
     ? mxcUrlToHttp(mx, avatarMxc, useAuthentication, 96, 96, 'crop') ?? undefined
     : undefined;
-
-  const [peopleDrawer, setPeopleDrawer] = useSetting(settingsAtom, 'isPeopleDrawer');
 
   const handleSearchClick = () => {
     const searchParams: _SearchPathSearchParams = {
@@ -437,13 +436,6 @@ export function RoomViewHeader({ callView }: { callView?: boolean }) {
 
   const openSettings = useOpenRoomSettings();
   const parentSpace = useSpaceOptionally();
-  const handleMemberToggle = () => {
-    if (callView) {
-      openSettings(room.roomId, parentSpace?.roomId, RoomSettingsPage.MembersPage);
-      return;
-    }
-    setPeopleDrawer(!peopleDrawer);
-  };
 
   return (
     <PageHeader
@@ -476,10 +468,10 @@ export function RoomViewHeader({ callView }: { callView?: boolean }) {
             </Avatar>
           )}
           <Box direction="Column">
-            <Text size={topic ? 'H5' : 'H3'} truncate>
+            <Text size="H5" truncate>
               {name}
             </Text>
-            {topic && (
+            {
               <UseStateProvider initial={false}>
                 {(viewTopic, setViewTopic) => (
                   <>
@@ -495,7 +487,7 @@ export function RoomViewHeader({ callView }: { callView?: boolean }) {
                         >
                           <RoomTopicViewer
                             name={name}
-                            topic={topic}
+                            topic={subject}
                             requestClose={() => setViewTopic(false)}
                           />
                         </FocusTrap>
@@ -510,12 +502,12 @@ export function RoomViewHeader({ callView }: { callView?: boolean }) {
                       priority="300"
                       truncate
                     >
-                      {topic}
+                      Betreff: {subject}
                     </Text>
                   </>
                 )}
               </UseStateProvider>
-            )}
+            }
           </Box>
         </Box>
 
@@ -597,28 +589,6 @@ export function RoomViewHeader({ callView }: { callView?: boolean }) {
           {!room.isCallRoom() && livekitSupported && rtcSupported && hasCallPermission && (
             <CallButton />
           )}
-          {screenSize === ScreenSize.Desktop && (
-            <TooltipProvider
-              position="Bottom"
-              offset={4}
-              tooltip={
-                <Tooltip>
-                  {callView ? (
-                    <Text>Members</Text>
-                  ) : (
-                    <Text>{peopleDrawer ? 'Hide Members' : 'Show Members'}</Text>
-                  )}
-                </Tooltip>
-              }
-            >
-              {(triggerRef) => (
-                <IconButton fill="None" ref={triggerRef} onClick={handleMemberToggle}>
-                  <Icon size="400" src={Icons.User} />
-                </IconButton>
-              )}
-            </TooltipProvider>
-          )}
-
           <TooltipProvider
             position="Bottom"
             align="End"
