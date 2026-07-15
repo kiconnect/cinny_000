@@ -63,7 +63,7 @@ import { useAutoDiscoveryInfo } from '../../hooks/useAutoDiscoveryInfo';
 import { livekitSupport } from '../../hooks/useLivekitSupport';
 import { StateEvent } from '../../../types/matrix/room';
 import { webRTCSupported } from '../../utils/rtc';
-import { isOwnedTeamRoom } from '../../kiconnect/logic/roomState';
+import { isOwnedTeamRoom, isPatientRoom } from '../../kiconnect/logic/roomState';
 
 type RoomNavItemMenuProps = {
   room: Room;
@@ -232,6 +232,7 @@ type CaseRoleEntry = {
 
 type CaseContent = {
   roles?: {
+    bot?: CaseRoleEntry | string;
     arzt?: CaseRoleEntry | string;
     team?: CaseRoleEntry | string;
   };
@@ -244,6 +245,14 @@ function getRoleEntryState(entry: CaseRoleEntry | string | undefined): 'open' | 
 
   const value = String(entry?.state || '').trim().toLowerCase();
   return value === 'done' ? 'done' : 'open';
+}
+
+function isCaseFullyDone(content: CaseContent | undefined): boolean {
+  if (!content?.roles) return false;
+
+  return (['bot', 'arzt', 'team'] as const).every(
+    (role) => getRoleEntryState(content.roles?.[role]) === 'done'
+  );
 }
 
 function getRoleFromSpaceId(
@@ -360,7 +369,7 @@ export function RoomNavItem({
 
   const caseDone = caseRole
     ? getRoleEntryState(caseContent?.roles?.[caseRole]) === 'done'
-    : false;
+    : isPatientRoom(room) && isCaseFullyDone(caseContent);
   const ownTeamRoom = isOwnedTeamRoom(room, mx.getUserId());
 
   const [, forceUpdate] = useState(0);
