@@ -61,7 +61,7 @@ Im Realm KIconnect muss der Client kiconnect_cinny zur produktiven Cinny-Adresse
 
 - Valid Redirect URIs: https://cinny.kiconnect.at/*
 - Web Origins: https://cinny.kiconnect.at
-- Valid post logout redirect URIs: https://cinny.kiconnect.at/*
+- Valid post logout redirect URIs: https://cinny.kiconnect.at/* oder +
 
 Der Logout-Code setzt folgende Parameter:
 
@@ -74,6 +74,23 @@ getrennt. Wenn nach Logout "Invalid redirect uri" erscheint, zuerst im Realm
 KIconnect unter Clients -> kiconnect_cinny -> Settings -> Logout settings die
 "Valid post logout redirect URIs" pruefen. Eine Aenderung dort braucht keinen
 Neustart von Keycloak oder Cinny.
+
+Wichtig bei der Einstellung "+": Sie verweist auf die normalen "Valid Redirect
+URIs" desselben Clients. Die produktive Cinny-Adresse muss daher dort enthalten
+sein. Fehlt sie, meldet Keycloak trotz "+" weiterhin "Invalid redirect uri".
+
+Cinny erhaelt keinen Keycloak-ID-Token, weil die OIDC-Anmeldung ueber Synapse
+laeuft. Ohne id_token_hint zeigt Keycloak standardmaessig "Do you want to log
+out?". Deshalb muss im produktiven Keycloak-Compose folgende Option gesetzt
+sein:
+
+   KC_SPI_LOGIN_PROTOCOL_OPENID_CONNECT_SUPPRESS_LOGOUT_CONFIRMATION_SCREEN: "true"
+
+Danach den Keycloak-Container neu erstellen/starten und kontrollieren, dass die
+Variable im Container aktiv ist. Diese Einstellung ist im SSO-Repository in
+docker-compose.keycloak.yml bereits enthalten. Sie gilt serverweit und ist fuer
+den KIconnect-Aufbau erforderlich, damit der Sicherheits-Logout ohne zweite
+Benutzerinteraktion abgeschlossen wird.
 
 Caddy / Webserver auf Produktion
 --------------------------------
@@ -140,17 +157,27 @@ Der Dev-Keycloak-Client kiconnect_cinny braucht entsprechend:
    Web Origins: https://devcinny.kiconnect.at
    Valid post logout redirect URIs: https://devcinny.kiconnect.at/*
 
+Auch im Dev-System kann "Valid post logout redirect URIs" auf "+" stehen, aber
+dann muss https://devcinny.kiconnect.at/* zwingend unter "Valid Redirect URIs"
+eingetragen sein.
+
 Sicherheits- und Oberflaechenfunktionen im gemeinsamen Build
 ------------------------------------------------------------
 
 - Grosser, auch mobil gut sichtbarer Button "Sicher abmelden".
 - Vollstaendiger Logout aus Matrix und Keycloak sowie Loeschen lokaler Daten.
+- Matrix-Logout und IndexedDB-Bereinigung laufen parallel; erst nach Abschluss
+  beider Schritte erfolgt die Weiterleitung zum Keycloak-Logout.
 - Automatischer Komplett-Logout nach 30 Minuten echter Inaktivitaet.
 - Patientenraum-Owner: "Chat zuruecksetzen" mit Rueckfrage; sendet storno!.
 - Team/Nicht-Owner: bestehende Erledigt-/Weiterleiten- und Suchfunktionen.
 - E-Mail-artige Inbox mit Betreff, Vorschau, 24-Stunden-Zeit und breiterer Liste.
 - Helles Farbschema, reduzierte Teilnehmerdarstellung und dezente Rollen-Icons.
 - Angepasste KIconnect-Browser-, PWA- und App-Icons.
+- Manifest-Icons in 192x192 und 512x512 sowie feste id/start_url/scope-Werte,
+  damit Edge die Anwendung als installierbare PWA erkennt.
+- "Invite Member" ist in der Raum-Einleitung global entfernt; Benutzer werden
+  ausschliesslich ueber die vorgesehene KIconnect-Raumlogik verwaltet.
 
 Abnahmetest nach Produktivdeployment
 ------------------------------------

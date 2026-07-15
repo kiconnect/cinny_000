@@ -43,6 +43,14 @@ const copyFiles = {
       dest: '',
     },
     {
+      src: 'public/kiconnect-icon-192.png',
+      dest: '',
+    },
+    {
+      src: 'public/kiconnect-icon-512.png',
+      dest: '',
+    },
+    {
       src: 'public/res/android',
       dest: 'public/',
     },

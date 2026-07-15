@@ -80,26 +80,22 @@ async function deleteAllIndexedDBForOrigin(): Promise<void> {
 }
 
 export async function clientLogout(mx: MatrixClient): Promise<void> {
-  // 1) Matrix logout
-  try {
-    await mx.logout();
-  } catch {}
-
-  // 2) Client stoppen
-  try {
-    mx.stopClient();
-  } catch {}
-
-  // 3) lokalen Storage + IndexedDB killen (sonst "expected X got Y")
+  // Storage synchronously first, then perform the network logout and the
+  // potentially slower IndexedDB cleanup in parallel.
   try {
     localStorage.clear();
     sessionStorage.clear();
   } catch {}
 
+  await Promise.allSettled([
+    mx.logout(),
+    deleteAllIndexedDBForOrigin(),
+  ]);
+
   try {
-    await deleteAllIndexedDBForOrigin();
+    mx.stopClient();
   } catch {}
 
-  // 4) Keycloak SSO logout -> zurück zur App
+  // Matrix and local state are gone; now terminate the Keycloak browser SSO.
   window.location.assign(await buildKeycloakLogoutUrl());
 }
