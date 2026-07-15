@@ -90,12 +90,18 @@ export default defineConfig({
     port: 8088,
     host: true,
     allowedHosts: [
-      'test.kiconnect.at'
+      'test.kiconnect.at',
+      'devcinny.kiconnect.at',
     ],
     fs: {
       // Allow serving files from one level up to the project root
       allow: ['..'],
     },
+  },
+  preview: {
+    host: true,
+    port: 8001,
+    allowedHosts: ['devcinny.kiconnect.at'],
   },
   plugins: [
     serverMatrixSdkCryptoWasm('/node_modules/.vite/deps/pkg/matrix_sdk_crypto_wasm_bg.wasm'),
