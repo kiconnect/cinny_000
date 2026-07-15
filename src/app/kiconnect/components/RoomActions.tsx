@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { Box, Button, Dialog, Overlay, OverlayBackdrop, OverlayCenter, Text } from "folds";
 import type { Room } from "matrix-js-sdk/src/matrix";
 import type { MatrixClient } from "matrix-js-sdk";
 import { useMatrixClient } from "../../hooks/useMatrixClient";
 import { useSelectedSpace } from "../../hooks/router/useSelectedSpace";
 
-import { isTeamRoom } from "../logic/roomState";
+import { getRoomOwner, isPatientRoom, isTeamRoom } from "../logic/roomState";
 import { delete_done } from "../logic/delete_done";
+import { clientLogout } from "../logic/logout";
 import KiconnectSearchDialog from "../components/KiconnectSearchDialog";
 
 import "../styles/RoomActions.css";
@@ -168,12 +170,18 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
   const selectedSpaceId = useSelectedSpace();
 
   const [showSearch, setShowSearch] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [, forceUpdate] = useState(0);
   const [sending, setSending] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   const teamRoom = useMemo(() => isTeamRoom(room), [room]);
   const caseInfo = getOwnRoleStatus(mx, room, selectedSpaceId);
+  const roomOwner = getRoomOwner(room);
+  const patientRoomOwner =
+    isPatientRoom(room) &&
+    (roomOwner ? roomOwner === mx.getUserId() : caseInfo.role === undefined);
 
   const erledigtLabel = caseInfo.own === "done" ? "Wieder öffnen" : "Erledigt";
 
@@ -217,6 +225,27 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
       setErr(toErrString(e));
     }
   };
+
+  const onSecureLogout = async () => {
+    if (loggingOut) return;
+
+    setLoggingOut(true);
+    setErr(null);
+    try {
+      await clientLogout(mx);
+    } catch (e) {
+      setErr(toErrString(e));
+      setLoggingOut(false);
+    }
+  };
+
+  const secureLogoutButton = (
+    <div className="kiconnect-secure-logout">
+      <button type="button" onClick={onSecureLogout} disabled={loggingOut}>
+        {loggingOut ? "Sichere Abmeldung läuft …" : "Sicher abmelden"}
+      </button>
+    </div>
+  );
 
   const onToggleDone = async () => {
     if (sending) return;
@@ -286,6 +315,25 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
     }
   };
 
+  const onResetChat = async () => {
+    if (sending) return;
+
+    setSending(true);
+    setErr(null);
+
+    try {
+      await mx.sendEvent(room.roomId, "m.room.message", {
+        msgtype: "m.text",
+        body: "storno!",
+      });
+      setShowResetConfirm(false);
+    } catch (e) {
+      setErr(toErrString(e));
+    } finally {
+      setSending(false);
+    }
+  };
+
   if (teamRoom) {
     return (
       <>
@@ -302,24 +350,73 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
           <button onClick={onDeleteDone}>Erledigte Chats löschen</button>
           {err && <span style={{ marginLeft: 8, fontSize: 12 }}>{err}</span>}
         </div>
+        {secureLogoutButton}
+      </>
+    );
+  }
+
+  if (patientRoomOwner) {
+    return (
+      <>
+        {showResetConfirm && (
+          <Overlay open backdrop={<OverlayBackdrop />}>
+            <OverlayCenter>
+              <Dialog variant="Surface" style={{ width: "min(420px, calc(100vw - 32px))" }}>
+                <Box direction="Column" gap="400" style={{ padding: 24 }}>
+                  <Box direction="Column" gap="200">
+                    <Text size="H4">Chat zurücksetzen</Text>
+                    <Text priority="400">Soll der Chat wirklich zurückgesetzt werden?</Text>
+                  </Box>
+                  {err && <Text size="T300">{err}</Text>}
+                  <Box direction="Row" gap="200" justifyContent="End">
+                    <Button
+                      variant="Secondary"
+                      onClick={() => setShowResetConfirm(false)}
+                      disabled={sending}
+                    >
+                      Abbrechen
+                    </Button>
+                    <Button variant="Critical" onClick={onResetChat} disabled={sending}>
+                      {sending ? "Wird zurückgesetzt …" : "Chat zurücksetzen"}
+                    </Button>
+                  </Box>
+                </Box>
+              </Dialog>
+            </OverlayCenter>
+          </Overlay>
+        )}
+
+        <div className="kiconnect-room-actions">
+          <div className="kiconnect-room-actions-divider" />
+          <button onClick={() => setShowResetConfirm(true)} disabled={sending}>
+            Chat zurücksetzen
+          </button>
+          {err && !showResetConfirm && (
+            <span style={{ marginLeft: 8, fontSize: 12 }}>{err}</span>
+          )}
+        </div>
+        {secureLogoutButton}
       </>
     );
   }
 
   return (
-    <div className="kiconnect-room-actions">
-      <div className="kiconnect-room-actions-divider" />
-      <button onClick={onToggleDone} disabled={sending}>
-        {sending ? "…" : erledigtLabel}
-      </button>
-
-      {canForward && (
-        <button onClick={onForward} disabled={sending}>
-          {sending ? "…" : forwardLabel}
+    <>
+      <div className="kiconnect-room-actions">
+        <div className="kiconnect-room-actions-divider" />
+        <button onClick={onToggleDone} disabled={sending}>
+          {sending ? "…" : erledigtLabel}
         </button>
-      )}
 
-      {err && <span style={{ marginLeft: 8, fontSize: 12 }}>{err}</span>}
-    </div>
+        {canForward && (
+          <button onClick={onForward} disabled={sending}>
+            {sending ? "…" : forwardLabel}
+          </button>
+        )}
+
+        {err && <span style={{ marginLeft: 8, fontSize: 12 }}>{err}</span>}
+      </div>
+      {secureLogoutButton}
+    </>
   );
 }
