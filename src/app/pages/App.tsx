@@ -12,6 +12,7 @@ import { FeatureCheck } from './FeatureCheck';
 import { createRouter } from './Router';
 import { ScreenSizeProvider, useScreenSize } from '../hooks/useScreenSize';
 import { useCompositionEndTracking } from '../hooks/useComposingCheck';
+import { UnlockCallback } from '../kiconnect/lock/UnlockCallback';
 
 const queryClient = new QueryClient();
 
@@ -35,12 +36,16 @@ function App() {
               >
                 {(clientConfig) => (
                   <ClientConfigProvider value={clientConfig}>
-                    <QueryClientProvider client={queryClient}>
-                      <JotaiProvider>
-                        <RouterProvider router={createRouter(clientConfig, screenSize)} />
-                      </JotaiProvider>
-                      <ReactQueryDevtools initialIsOpen={false} />
-                    </QueryClientProvider>
+                    {window.location.pathname === '/unlock/callback' ? (
+                      <UnlockCallback config={clientConfig} />
+                    ) : (
+                      <QueryClientProvider client={queryClient}>
+                        <JotaiProvider>
+                          <RouterProvider router={createRouter(clientConfig, screenSize)} />
+                        </JotaiProvider>
+                        <ReactQueryDevtools initialIsOpen={false} />
+                      </QueryClientProvider>
+                    )}
                   </ClientConfigProvider>
                 )}
               </ClientConfigLoader>

@@ -33,8 +33,19 @@
 
 .kiconnect-secure-logout {
     display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
     justify-content: center;
     padding: 0 16px calc(8px + env(safe-area-inset-bottom));
+}
+
+.kiconnect-secure-logout .kiconnect-lock-button {
+    border-color: #1e7f93;
+    background: #1e7f93;
+}
+
+.kiconnect-secure-logout .kiconnect-lock-button:hover {
+    background: #176879;
 }
 
 .kiconnect-secure-logout button {

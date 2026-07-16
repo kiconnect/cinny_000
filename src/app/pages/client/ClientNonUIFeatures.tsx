@@ -23,6 +23,7 @@ import { getMxIdLocalPart, mxcUrlToHttp } from '../../utils/matrix';
 import { useSelectedRoom } from '../../hooks/router/useSelectedRoom';
 import { useInboxNotificationsSelected } from '../../hooks/router/useInbox';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
+import { KiconnectLockProvider, useKiconnectLock } from '../../kiconnect/lock/LockProvider';
 
 const KIconnectLogo = '/kiconnect-app-icon-v3.png';
 
@@ -69,13 +70,14 @@ function InviteNotifications() {
   const navigate = useNavigate();
   const [showNotifications] = useSetting(settingsAtom, 'showNotifications');
   const [notificationSound] = useSetting(settingsAtom, 'isNotificationSounds');
+  const { locked } = useKiconnectLock();
 
   const notify = useCallback(
     (count: number) => {
-      const noti = new window.Notification('Invitation', {
+      const noti = new window.Notification(locked ? 'KI-Connect' : 'Invitation', {
         icon: KIconnectLogo,
         badge: KIconnectLogo,
-        body: `You have ${count} new invitation request.`,
+        body: locked ? 'Neue Aktivität in KI-Connect' : `You have ${count} new invitation request.`,
         silent: true,
       });
 
@@ -84,7 +86,7 @@ function InviteNotifications() {
         noti.close();
       };
     },
-    [navigate]
+    [locked, navigate]
   );
 
   const playSound = useCallback(() => {
@@ -120,6 +122,7 @@ function MessageNotifications() {
   const useAuthentication = useMediaAuthentication();
   const [showNotifications] = useSetting(settingsAtom, 'showNotifications');
   const [notificationSound] = useSetting(settingsAtom, 'isNotificationSounds');
+  const { locked } = useKiconnectLock();
 
   const navigate = useNavigate();
   const notificationSelected = useInboxNotificationsSelected();
@@ -137,10 +140,10 @@ function MessageNotifications() {
       roomId: string;
       eventId: string;
     }) => {
-      const noti = new window.Notification(roomName, {
-        icon: roomAvatar,
-        badge: roomAvatar,
-        body: `New inbox notification from ${username}`,
+      const noti = new window.Notification(locked ? 'KI-Connect' : roomName, {
+        icon: locked ? KIconnectLogo : roomAvatar,
+        badge: locked ? KIconnectLogo : roomAvatar,
+        body: locked ? 'Neue Nachricht in KI-Connect' : `New inbox notification from ${username}`,
         silent: true,
       });
 
@@ -153,7 +156,7 @@ function MessageNotifications() {
       notifRef.current?.close();
       notifRef.current = noti;
     },
-    [navigate]
+    [locked, navigate]
   );
 
   const playSound = useCallback(() => {
@@ -243,13 +246,13 @@ type ClientNonUIFeaturesProps = {
 
 export function ClientNonUIFeatures({ children }: ClientNonUIFeaturesProps) {
   return (
-    <>
+    <KiconnectLockProvider>
       <SystemEmojiFeature />
       <PageZoomFeature />
       <FaviconUpdater />
       <InviteNotifications />
       <MessageNotifications />
       {children}
-    </>
+    </KiconnectLockProvider>
   );
 }

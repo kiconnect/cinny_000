@@ -5,7 +5,7 @@ import { trimTrailingSlash } from '../utils/common';
 
 const getClientConfig = async (): Promise<ClientConfig> => {
   const url = `${trimTrailingSlash(import.meta.env.BASE_URL)}/config.json`;
-  const config = await fetch(url, { method: 'GET' });
+  const config = await fetch(url, { method: 'GET', cache: 'no-store' });
   return config.json();
 };
 

@@ -15,6 +15,14 @@ export type ClientConfig = {
     clientId?: string;
     postLogoutRedirectUri?: string;
   };
+  keycloakUnlock?: {
+    issuer?: string;
+    clientId?: string;
+    redirectUri?: string;
+  };
+  kiconnectLock?: {
+    timeoutMinutes?: number;
+  };
 
   featuredCommunities?: {
     openAsDefault?: boolean;

@@ -39,6 +39,10 @@ Produktivwerte, die nach dem Build in dist/config.json stehen muessen:
    hidePasswordLogin: true
    keycloakLogout.issuer: https://sso.id-am.at/realms/KIconnect
    keycloakLogout.clientId: kiconnect_cinny
+   keycloakUnlock.issuer: https://sso.id-am.at/realms/KIconnect
+   keycloakUnlock.clientId: kiconnect_cinny
+   keycloakUnlock.redirectUri: https://cinny.kiconnect.at/unlock/callback
+   kiconnectLock.timeoutMinutes: 5
 
 Kontrolle nach dem Build:
 
@@ -157,6 +161,34 @@ Der Dev-Keycloak-Client kiconnect_cinny braucht entsprechend:
    Web Origins: https://devcinny.kiconnect.at
    Valid post logout redirect URIs: https://devcinny.kiconnect.at/*
 
+Fuer die Entsperrung muss insbesondere dieser Callback erlaubt sein:
+
+   https://devcinny.kiconnect.at/unlock/callback
+
+Der Client bleibt oeffentlich (Client authentication: Off), Standard Flow ist
+aktiv und PKCE muss S256 verwenden. Der Browser-Flow des Clients muss auf einen
+eigenen Passkey-/WebAuthn-Flow zeigen. Dieser Flow darf keine Passwort- oder
+OTP-Ausweichmoeglichkeit enthalten. Cinny sendet max_age=0 und prompt=login,
+damit eine vorhandene SSO-Sitzung die erneute Benutzerpruefung nicht umgeht.
+
+Wichtig: Keycloak vergleicht Web Origins exakt. Der Eintrag darf weder fuehrende
+Leerzeichen noch einen abschliessenden Slash oder `/*` enthalten. Korrekt ist:
+
+   https://devcinny.kiconnect.at
+
+Beim Dev-Test fuehrten zwei unsichtbare Leerzeichen vor der URL zu `Failed to
+fetch` in Cinny und `{"error":"Invalid origin"}` am Keycloak-Token-Endpunkt.
+Wenn dieser Fehler auftritt, den Web-Origin vollstaendig loeschen, von Hand ohne
+Leerzeichen neu eingeben, mit Enter bestaetigen und speichern. Ein Browser- oder
+PWA-Cache war dabei nicht die Ursache.
+
+Am Produktivsystem gelten dieselben Einstellungen mit:
+
+   Valid Redirect URIs: https://cinny.kiconnect.at/*
+   Web Origins: https://cinny.kiconnect.at
+   Callback: https://cinny.kiconnect.at/unlock/callback
+   Valid post logout redirect URIs: https://cinny.kiconnect.at/*
+
 Auch im Dev-System kann "Valid post logout redirect URIs" auf "+" stehen, aber
 dann muss https://devcinny.kiconnect.at/* zwingend unter "Valid Redirect URIs"
 eingetragen sein.
@@ -164,11 +196,24 @@ eingetragen sein.
 Sicherheits- und Oberflaechenfunktionen im gemeinsamen Build
 ------------------------------------------------------------
 
-- Grosser, auch mobil gut sichtbarer Button "Sicher abmelden".
+- Zwei getrennte, auch mobil gut sichtbare Buttons "Cinny sperren" und
+  "Vollstaendig abmelden".
+- Die manuelle und automatische Sperre verdeckt die gesamte Oberflaeche, laesst
+  Matrix-Sitzung, Synchronisation, Access-Token und Push-Registrierung aber aktiv.
+- Automatische Sperre nach 5 Minuten echter Inaktivitaet. Zeitstempel und
+  Sperrzustand werden persistent gespeichert und beim Sichtbarwerden der PWA
+  ausgewertet; ein Reload umgeht die Sperre nicht.
+- Beim Wechsel in den Hintergrund wird sofort ein neutraler Sichtschutz gezeigt,
+  damit der App-Switcher keine Chat-Inhalte abbildet.
+- Entsperrung ueber einen separaten OIDC Authorization Code Flow mit PKCE,
+  max_age=0 und prompt=login am Client kiconnect_cinny. Die bestehende
+  Matrix-Sitzung und ihr Token werden dabei nicht ersetzt.
+- Im gesperrten Zustand enthalten Browser-Benachrichtigungen keine Raumtitel,
+  Absender, Avatare oder Nachrichtentexte.
 - Vollstaendiger Logout aus Matrix und Keycloak sowie Loeschen lokaler Daten.
+- Vor dem Matrix-Logout werden die Pusher des aktuellen Matrix-Geraets entfernt.
 - Matrix-Logout und IndexedDB-Bereinigung laufen parallel; erst nach Abschluss
   beider Schritte erfolgt die Weiterleitung zum Keycloak-Logout.
-- Automatischer Komplett-Logout nach 30 Minuten echter Inaktivitaet.
 - Patientenraum-Owner: "Chat zuruecksetzen" mit Rueckfrage; sendet storno!.
 - Team/Nicht-Owner: bestehende Erledigt-/Weiterleiten- und Suchfunktionen.
 - E-Mail-artige Inbox mit Betreff, Vorschau, 24-Stunden-Zeit und breiterer Liste.
@@ -187,8 +232,14 @@ Abnahmetest nach Produktivdeployment
 3. Patienten- und Teamraumfunktionen entsprechend der Rollen testen.
 4. "Chat zuruecksetzen" pruefen: storno!, neutraler Betreff und entfernte
    Team-Einladungen/-Mitglieder.
-5. "Sicher abmelden" pruefen: Keycloak-Sitzung beendet und Rueckleitung ohne
+5. "Cinny sperren" pruefen: neutraler Sperrbildschirm, keine Chatdaten sichtbar,
+   Push/Matrix-Synchronisation bleiben aktiv.
+6. "Mit Passkey entsperren" pruefen: Keycloak verlangt erneut WebAuthn und
+   danach ist dieselbe Matrix-Sitzung weiterhin aktiv.
+7. Reload im gesperrten Zustand sowie Hintergrund/Wiederaufnahme nach mehr als
+   5 Minuten testen. Beides muss gesperrt bleiben bzw. sperren.
+8. "Vollstaendig abmelden" normal und am Sperrbildschirm pruefen: Matrix- und
+   Keycloak-Sitzung beendet und Rueckleitung ohne
    "Invalid redirect uri".
-6. 30 Minuten echte Inaktivitaet sowie fortlaufende Aktivitaet testen.
-7. PWA/Browser-Icon nach Entfernen einer alten Installation bzw. nach Leeren des
+9. PWA/Browser-Icon nach Entfernen einer alten Installation bzw. nach Leeren des
    Service-Worker-Caches pruefen.
