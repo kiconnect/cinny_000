@@ -244,7 +244,7 @@ export function KiconnectLockProvider({ children }: Props): JSX.Element {
                 disabled={unlocking || loggingOut}
                 style={primaryButtonStyle}
               >
-                {unlocking ? 'Passkey wird geöffnet …' : 'Mit Passkey entsperren'}
+                {unlocking ? 'Passkey wird geöffnet …' : 'Client entsperren'}
               </button>
               <button
                 type="button"

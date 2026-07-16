@@ -7,8 +7,6 @@ import { useSelectedSpace } from "../../hooks/router/useSelectedSpace";
 
 import { getRoomOwner, isPatientRoom, isTeamRoom } from "../logic/roomState";
 import { delete_done } from "../logic/delete_done";
-import { clientLogout } from "../logic/logout";
-import { useKiconnectLock } from "../lock/LockProvider";
 import KiconnectSearchDialog from "../components/KiconnectSearchDialog";
 
 import "../styles/RoomActions.css";
@@ -169,13 +167,11 @@ function isUsableSpaceId(value: unknown): value is string {
 export function KiconnectRoomActions({ room }: Props): JSX.Element {
   const mx = useMatrixClient();
   const selectedSpaceId = useSelectedSpace();
-  const { lock } = useKiconnectLock();
 
   const [showSearch, setShowSearch] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [, forceUpdate] = useState(0);
   const [sending, setSending] = useState(false);
-  const [loggingOut, setLoggingOut] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   const teamRoom = useMemo(() => isTeamRoom(room), [room]);
@@ -227,30 +223,6 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
       setErr(toErrString(e));
     }
   };
-
-  const onSecureLogout = async () => {
-    if (loggingOut) return;
-
-    setLoggingOut(true);
-    setErr(null);
-    try {
-      await clientLogout(mx);
-    } catch (e) {
-      setErr(toErrString(e));
-      setLoggingOut(false);
-    }
-  };
-
-  const sessionButtons = (
-    <div className="kiconnect-secure-logout">
-      <button type="button" className="kiconnect-lock-button" onClick={lock} disabled={loggingOut}>
-        Cinny sperren
-      </button>
-      <button type="button" onClick={onSecureLogout} disabled={loggingOut}>
-        {loggingOut ? "Abmeldung läuft …" : "Vollständig abmelden"}
-      </button>
-    </div>
-  );
 
   const onToggleDone = async () => {
     if (sending) return;
@@ -355,7 +327,6 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
           <button onClick={onDeleteDone}>Erledigte Chats löschen</button>
           {err && <span style={{ marginLeft: 8, fontSize: 12 }}>{err}</span>}
         </div>
-        {sessionButtons}
       </>
     );
   }
@@ -400,7 +371,6 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
             <span style={{ marginLeft: 8, fontSize: 12 }}>{err}</span>
           )}
         </div>
-        {sessionButtons}
       </>
     );
   }
@@ -421,7 +391,6 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
 
         {err && <span style={{ marginLeft: 8, fontSize: 12 }}>{err}</span>}
       </div>
-      {sessionButtons}
     </>
   );
 }

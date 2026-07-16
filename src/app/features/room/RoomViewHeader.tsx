@@ -20,7 +20,6 @@ import {
   PopOut,
   RectCords,
   Badge,
-  Spinner,
   Button,
 } from 'folds';
 import { useNavigate } from 'react-router-dom';
@@ -33,45 +32,29 @@ import { RoomTopicViewer } from '../../components/room-topic-viewer';
 import { StateEvent } from '../../../types/matrix/room';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useIsDirectRoom, useRoom } from '../../hooks/useRoom';
-import { useSetting } from '../../state/hooks/settings';
-import { settingsAtom } from '../../state/settings';
 import { useSpaceOptionally } from '../../hooks/useSpace';
 import { getHomeSearchPath, getSpaceSearchPath, withSearchParam } from '../../pages/pathUtils';
-import { getCanonicalAliasOrRoomId, isRoomAlias, mxcUrlToHttp } from '../../utils/matrix';
+import { getCanonicalAliasOrRoomId, mxcUrlToHttp } from '../../utils/matrix';
 import { _SearchPathSearchParams } from '../../pages/paths';
 import * as css from './RoomViewHeader.css';
-import { useRoomUnread } from '../../state/hooks/unread';
 import { usePowerLevelsContext } from '../../hooks/usePowerLevels';
-import { markAsRead } from '../../utils/notifications';
-import { roomToUnreadAtom } from '../../state/room/roomToUnread';
-import { copyToClipboard } from '../../utils/dom';
-import { LeaveRoomPrompt } from '../../components/leave-room-prompt';
 import { useRoomAvatar, useRoomName, useRoomTopic } from '../../hooks/useRoomMeta';
 import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
 import { stopPropagation } from '../../utils/keyboard';
-import { getMatrixToRoom } from '../../plugins/matrix-to';
-import { getViaServers } from '../../plugins/via-servers';
 import { BackRouteHandler } from '../../components/BackRouteHandler';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { useRoomPinnedEvents } from '../../hooks/useRoomPinnedEvents';
 import { RoomPinMenu } from './room-pin-menu';
-import { useOpenRoomSettings } from '../../state/hooks/roomSettings';
-import { RoomNotificationModeSwitcher } from '../../components/RoomNotificationSwitcher';
-import {
-  getRoomNotificationMode,
-  getRoomNotificationModeIcon,
-  useRoomsNotificationPreferencesContext,
-} from '../../hooks/useRoomsNotificationPreferences';
 import { JumpToTime } from './jump-to-time';
 import { useRoomNavigate } from '../../hooks/useRoomNavigate';
 import { useRoomCreators } from '../../hooks/useRoomCreators';
 import { useRoomPermissions } from '../../hooks/useRoomPermissions';
-import { InviteUserPrompt } from '../../components/invite-user-prompt';
 import { ContainerColor } from '../../styles/ContainerColor.css';
-import { RoomSettingsPage } from '../../state/roomSettings';
 import { useCallEmbed, useCallStart } from '../../hooks/useCallEmbed';
 import { useLivekitSupport } from '../../hooks/useLivekitSupport';
 import { webRTCSupported } from '../../utils/rtc';
+import { useKiconnectLock } from '../../kiconnect/lock/LockProvider';
+import { clientLogout } from '../../kiconnect/logic/logout';
 
 type RoomMenuProps = {
   room: Room;
@@ -79,123 +62,24 @@ type RoomMenuProps = {
 };
 const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose }, ref) => {
   const mx = useMatrixClient();
-  const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
-  const unread = useRoomUnread(room.roomId, roomToUnreadAtom);
-  const powerLevels = usePowerLevelsContext();
-  const creators = useRoomCreators(room);
-
-  const permissions = useRoomPermissions(creators, powerLevels);
-  const canInvite = permissions.action('invite', mx.getSafeUserId());
-  const notificationPreferences = useRoomsNotificationPreferencesContext();
-  const notificationMode = getRoomNotificationMode(notificationPreferences, room.roomId);
+  const { lock } = useKiconnectLock();
   const { navigateRoom } = useRoomNavigate();
+  const [loggingOut, setLoggingOut] = useState(false);
 
-  const [invitePrompt, setInvitePrompt] = useState(false);
-
-  const handleMarkAsRead = () => {
-    markAsRead(mx, room.roomId, hideActivity);
+  const handleLock = () => {
     requestClose();
+    lock();
   };
 
-  const handleInvite = () => {
-    setInvitePrompt(true);
-  };
-
-  const handleCopyLink = () => {
-    const roomIdOrAlias = getCanonicalAliasOrRoomId(mx, room.roomId);
-    const viaServers = isRoomAlias(roomIdOrAlias) ? undefined : getViaServers(room);
-    copyToClipboard(getMatrixToRoom(roomIdOrAlias, viaServers));
-    requestClose();
-  };
-
-  const openSettings = useOpenRoomSettings();
-  const parentSpace = useSpaceOptionally();
-  const handleOpenSettings = () => {
-    openSettings(room.roomId, parentSpace?.roomId);
-    requestClose();
+  const handleLogout = async () => {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    await clientLogout(mx);
   };
 
   return (
-    <Menu ref={ref} style={{ maxWidth: toRem(160), width: '100vw' }}>
-      {invitePrompt && (
-        <InviteUserPrompt
-          room={room}
-          requestClose={() => {
-            setInvitePrompt(false);
-            requestClose();
-          }}
-        />
-      )}
+    <Menu ref={ref} style={{ maxWidth: toRem(230), width: '100vw' }}>
       <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
-        <MenuItem
-          onClick={handleMarkAsRead}
-          size="300"
-          after={<Icon size="100" src={Icons.CheckTwice} />}
-          radii="300"
-          disabled={!unread}
-        >
-          <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
-            Mark as Read
-          </Text>
-        </MenuItem>
-        <RoomNotificationModeSwitcher roomId={room.roomId} value={notificationMode}>
-          {(handleOpen, opened, changing) => (
-            <MenuItem
-              size="300"
-              after={
-                changing ? (
-                  <Spinner size="100" variant="Secondary" />
-                ) : (
-                  <Icon size="100" src={getRoomNotificationModeIcon(notificationMode)} />
-                )
-              }
-              radii="300"
-              aria-pressed={opened}
-              onClick={handleOpen}
-            >
-              <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
-                Notifications
-              </Text>
-            </MenuItem>
-          )}
-        </RoomNotificationModeSwitcher>
-      </Box>
-      <Line variant="Surface" size="300" />
-      <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
-        <MenuItem
-          onClick={handleInvite}
-          variant="Primary"
-          fill="None"
-          size="300"
-          after={<Icon size="100" src={Icons.UserPlus} />}
-          radii="300"
-          aria-pressed={invitePrompt}
-          disabled={!canInvite}
-        >
-          <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
-            Invite
-          </Text>
-        </MenuItem>
-        <MenuItem
-          onClick={handleCopyLink}
-          size="300"
-          after={<Icon size="100" src={Icons.Link} />}
-          radii="300"
-        >
-          <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
-            Copy Link
-          </Text>
-        </MenuItem>
-        <MenuItem
-          onClick={handleOpenSettings}
-          size="300"
-          after={<Icon size="100" src={Icons.Setting} />}
-          radii="300"
-        >
-          <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
-            Room Settings
-          </Text>
-        </MenuItem>
         <UseStateProvider initial={false}>
           {(promptJump, setPromptJump) => (
             <>
@@ -226,32 +110,16 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
       </Box>
       <Line variant="Surface" size="300" />
       <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
-        <UseStateProvider initial={false}>
-          {(promptLeave, setPromptLeave) => (
-            <>
-              <MenuItem
-                onClick={() => setPromptLeave(true)}
-                variant="Critical"
-                fill="None"
-                size="300"
-                after={<Icon size="100" src={Icons.ArrowGoLeft} />}
-                radii="300"
-                aria-pressed={promptLeave}
-              >
-                <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
-                  Leave Room
-                </Text>
-              </MenuItem>
-              {promptLeave && (
-                <LeaveRoomPrompt
-                  roomId={room.roomId}
-                  onDone={requestClose}
-                  onCancel={() => setPromptLeave(false)}
-                />
-              )}
-            </>
-          )}
-        </UseStateProvider>
+        <MenuItem onClick={handleLock} size="300" radii="300">
+          <Text style={{ flexGrow: 1, fontWeight: 700 }} as="span" size="T300" truncate>
+            Client sperren
+          </Text>
+        </MenuItem>
+        <MenuItem onClick={handleLogout} size="300" radii="300" disabled={loggingOut}>
+          <Text style={{ flexGrow: 1, fontWeight: 700 }} as="span" size="T300" truncate>
+            {loggingOut ? 'Abmeldung läuft …' : 'Vollständig abmelden'}
+          </Text>
+        </MenuItem>
       </Box>
     </Menu>
   );
@@ -434,9 +302,6 @@ export function RoomViewHeader({ callView }: { callView?: boolean }) {
     setPinMenuAnchor(evt.currentTarget.getBoundingClientRect());
   };
 
-  const openSettings = useOpenRoomSettings();
-  const parentSpace = useSpaceOptionally();
-
   return (
     <PageHeader
       className={ContainerColor({ variant: 'Surface' })}
@@ -471,43 +336,41 @@ export function RoomViewHeader({ callView }: { callView?: boolean }) {
             <Text size="H5" truncate>
               {name}
             </Text>
-            {
-              <UseStateProvider initial={false}>
-                {(viewTopic, setViewTopic) => (
-                  <>
-                    <Overlay open={viewTopic} backdrop={<OverlayBackdrop />}>
-                      <OverlayCenter>
-                        <FocusTrap
-                          focusTrapOptions={{
-                            initialFocus: false,
-                            clickOutsideDeactivates: true,
-                            onDeactivate: () => setViewTopic(false),
-                            escapeDeactivates: stopPropagation,
-                          }}
-                        >
-                          <RoomTopicViewer
-                            name={name}
-                            topic={subject}
-                            requestClose={() => setViewTopic(false)}
-                          />
-                        </FocusTrap>
-                      </OverlayCenter>
-                    </Overlay>
-                    <Text
-                      as="button"
-                      type="button"
-                      onClick={() => setViewTopic(true)}
-                      className={css.HeaderTopic}
-                      size="T200"
-                      priority="300"
-                      truncate
-                    >
-                      Betreff: {subject}
-                    </Text>
-                  </>
-                )}
-              </UseStateProvider>
-            }
+            <UseStateProvider initial={false}>
+              {(viewTopic, setViewTopic) => (
+                <>
+                  <Overlay open={viewTopic} backdrop={<OverlayBackdrop />}>
+                    <OverlayCenter>
+                      <FocusTrap
+                        focusTrapOptions={{
+                          initialFocus: false,
+                          clickOutsideDeactivates: true,
+                          onDeactivate: () => setViewTopic(false),
+                          escapeDeactivates: stopPropagation,
+                        }}
+                      >
+                        <RoomTopicViewer
+                          name={name}
+                          topic={subject}
+                          requestClose={() => setViewTopic(false)}
+                        />
+                      </FocusTrap>
+                    </OverlayCenter>
+                  </Overlay>
+                  <Text
+                    as="button"
+                    type="button"
+                    onClick={() => setViewTopic(true)}
+                    className={css.HeaderTopic}
+                    size="T200"
+                    priority="300"
+                    truncate
+                  >
+                    Betreff: {subject}
+                  </Text>
+                </>
+              )}
+            </UseStateProvider>
           </Box>
         </Box>
 
