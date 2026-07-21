@@ -86,7 +86,10 @@ export function UnlockCallback({ config }: Props): JSX.Element {
           channel.postMessage(unlockedRecord);
           channel.close();
         }
-        window.opener?.postMessage({ type: 'kiconnect-unlock-success' }, window.location.origin);
+        window.opener?.postMessage(
+          { type: 'kiconnect-unlock-success', record: unlockedRecord },
+          window.location.origin
+        );
         setComplete(true);
         window.setTimeout(() => window.close(), 150);
         return;

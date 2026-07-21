@@ -40,10 +40,14 @@ export async function beginPasskeyUnlock(config: ClientConfig): Promise<Window |
   );
 
   if (popup) {
-    popup.document.title = 'KI connect entsperren';
+    popup.document.head.innerHTML =
+      '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+      '<title>KI connect – Sichere Anmeldung</title>';
     popup.document.body.style.cssText =
-      'margin:0;min-height:100vh;display:grid;place-items:center;font:16px system-ui;background:#f7fafb;color:#16343b';
-    popup.document.body.textContent = 'Sichere Anmeldung wird geöffnet …';
+      'margin:0;min-height:100vh;display:grid;place-items:center;padding:36px;box-sizing:border-box;text-align:center;font:24px system-ui;background:#f7fafb;color:#16343b';
+    popup.document.body.innerHTML =
+      '<main><h1 style="margin:0 0 18px;font-size:36px;line-height:1.2">Sichere Anmeldung</h1>' +
+      '<p style="margin:0;color:#527079;font-size:24px;line-height:1.5">Sie werden zur sicheren Anmeldung weitergeleitet …</p></main>';
   }
 
   writeUnlockTransaction({

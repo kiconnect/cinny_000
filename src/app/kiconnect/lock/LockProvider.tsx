@@ -13,7 +13,14 @@ import { useClientConfig } from '../../hooks/useClientConfig';
 import { getFallbackSession } from '../../state/sessions';
 import { clientLogout } from '../logic/logout';
 import { beginPasskeyUnlock } from './oidc';
-import { LockRecord, lockStorageKey, readLockRecord, writeLockRecord } from './storage';
+import {
+  clearUnlockTransaction,
+  LockRecord,
+  lockStorageKey,
+  readLockRecord,
+  readUnlockTransaction,
+  writeLockRecord,
+} from './storage';
 
 type LockContextValue = {
   locked: boolean;
@@ -68,7 +75,10 @@ export function KiconnectLockProvider({ children, mx }: Props): JSX.Element {
   }, [timeoutMs, userId]);
   const [locked, setLocked] = useState(initialRecord.locked);
   const [privacyShield, setPrivacyShield] = useState(false);
-  const [unlocking, setUnlocking] = useState(false);
+  const [unlocking, setUnlocking] = useState(() => {
+    const transaction = readUnlockTransaction();
+    return Boolean(transaction && Date.now() - transaction.createdAt < 10 * 60 * 1000);
+  });
   const [loggingOut, setLoggingOut] = useState(false);
   const [error, setError] = useState<string>();
   const recordRef = useRef<LockRecord>(initialRecord);
@@ -121,6 +131,10 @@ export function KiconnectLockProvider({ children, mx }: Props): JSX.Element {
         writeLockRecord(userId, record);
         setLocked(record.locked);
         setPrivacyShield(record.locked);
+        if (!record.locked) {
+          clearUnlockTransaction();
+          setUnlocking(false);
+        }
       };
       return () => {
         channel.close();
@@ -138,8 +152,14 @@ export function KiconnectLockProvider({ children, mx }: Props): JSX.Element {
       ) {
         return;
       }
-      const record = readLockRecord(userId);
+      const messageRecord = event.data?.record as Partial<LockRecord> | undefined;
+      const record: LockRecord =
+        messageRecord?.locked === false && typeof messageRecord.lastActivity === 'number'
+          ? { locked: false, lastActivity: messageRecord.lastActivity }
+          : { locked: false, lastActivity: Date.now() };
       recordRef.current = record;
+      writeLockRecord(userId, record);
+      clearUnlockTransaction();
       setLocked(record.locked);
       setPrivacyShield(record.locked);
       setUnlocking(false);
@@ -291,9 +311,13 @@ export function KiconnectLockProvider({ children, mx }: Props): JSX.Element {
                 alt="KI-Connect"
                 style={{ width: 112, height: 112, objectFit: 'contain' }}
               />
-              <h1 style={{ margin: '16px 0 8px', fontSize: 28 }}>KI-Connect ist gesperrt</h1>
+              <h1 style={{ margin: '16px 0 8px', fontSize: 28 }}>
+                {unlocking ? 'Sichere Anmeldung wird geprüft …' : 'KI-Connect ist gesperrt'}
+              </h1>
               <p style={{ margin: '0 0 24px', color: '#527079' }}>
-                Entsperren Sie die App sicher mit Ihrem Passkey.
+                {unlocking
+                  ? 'Nach erfolgreicher Prüfung wird KI connect geladen.'
+                  : 'Entsperren Sie die App sicher mit Ihrem Passkey.'}
               </p>
               <button
                 type="button"

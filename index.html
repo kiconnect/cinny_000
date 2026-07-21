@@ -56,6 +56,18 @@
         }
         if (!locked) return;
 
+        let unlockPending = false;
+        try {
+          const transaction = JSON.parse(
+            localStorage.getItem('kiconnect.unlock.transaction.v1') || 'null'
+          );
+          unlockPending =
+            typeof transaction?.createdAt === 'number' &&
+            Date.now() - transaction.createdAt < 10 * 60 * 1000;
+        } catch (_) {
+          unlockPending = false;
+        }
+
         const shell = document.createElement('div');
         shell.id = 'kiconnect-early-lock';
         shell.style.cssText =
@@ -70,24 +82,38 @@
           '</section>';
         document.body.prepend(shell);
 
-        const removeWhenUnlocked = (record) => {
-          if (record?.locked === false) shell.remove();
+        const showLoadingAfterUnlock = (record) => {
+          if (record?.locked !== false) return;
+          const heading = shell.querySelector('h1');
+          const description = shell.querySelector('p');
+          if (heading) heading.textContent = 'KI connect wird geladen …';
+          if (description) description.textContent = 'Die sichere Anmeldung war erfolgreich.';
+          const unlockButton = document.getElementById('kiconnect-early-unlock');
+          if (unlockButton) unlockButton.remove();
         };
         window.addEventListener('storage', (event) => {
           if (!event.key?.startsWith(lockPrefix) || !event.newValue) return;
           try {
-            removeWhenUnlocked(JSON.parse(event.newValue));
+            showLoadingAfterUnlock(JSON.parse(event.newValue));
           } catch (_) {
             // Ignore malformed data; React keeps the secure lock screen visible.
           }
         });
         if (typeof BroadcastChannel === 'function') {
           const channel = new BroadcastChannel('kiconnect-lock-v1');
-          channel.addEventListener('message', (event) => removeWhenUnlocked(event.data));
+          channel.addEventListener('message', (event) => showLoadingAfterUnlock(event.data));
         }
 
         const button = document.getElementById('kiconnect-early-unlock');
         const error = document.getElementById('kiconnect-early-error');
+        if (unlockPending) {
+          const heading = shell.querySelector('h1');
+          const description = shell.querySelector('p');
+          if (heading) heading.textContent = 'Sichere Anmeldung wird geprüft …';
+          if (description) description.textContent = 'Anschließend wird KI connect geladen.';
+          button.disabled = true;
+          button.textContent = 'Sichere Anmeldung läuft …';
+        }
         const base64Url = (bytes) => {
           let binary = '';
           bytes.forEach((byte) => {
@@ -104,12 +130,26 @@
         button.addEventListener('click', async () => {
           button.disabled = true;
           button.textContent = 'Sichere Anmeldung wird geöffnet …';
+          const heading = shell.querySelector('h1');
+          const description = shell.querySelector('p');
+          if (heading) heading.textContent = 'Sichere Anmeldung wird geprüft …';
+          if (description) description.textContent = 'Anschließend wird KI connect geladen.';
           error.textContent = '';
           const popup = window.open(
             '',
             `kiconnect-passkey-unlock-${Date.now()}`,
             'popup=yes,width=520,height=720,resizable=yes,scrollbars=yes'
           );
+          if (popup) {
+            popup.document.head.innerHTML =
+              '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+              '<title>KI connect – Sichere Anmeldung</title>';
+            popup.document.body.style.cssText =
+              'margin:0;min-height:100vh;display:grid;place-items:center;padding:36px;box-sizing:border-box;text-align:center;font:24px system-ui,sans-serif;background:#f7fafb;color:#16343b';
+            popup.document.body.innerHTML =
+              '<main><h1 style="margin:0 0 18px;font-size:36px;line-height:1.2">Sichere Anmeldung</h1>' +
+              '<p style="margin:0;color:#527079;font-size:24px;line-height:1.5">Sie werden zur sicheren Anmeldung weitergeleitet …</p></main>';
+          }
           try {
             const response = await fetch('/config.json', { cache: 'no-store' });
             if (!response.ok) throw new Error('Konfiguration konnte nicht geladen werden.');
