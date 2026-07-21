@@ -11,6 +11,7 @@ export type UnlockTransaction = {
   redirectUri: string;
   returnUrl: string;
   createdAt: number;
+  popup: boolean;
 };
 
 const LOCK_PREFIX = 'kiconnect.lock.v1.';
@@ -45,7 +46,7 @@ export function writeLockRecord(userId: string, record: LockRecord): void {
 
 export function readUnlockTransaction(): UnlockTransaction | undefined {
   try {
-    const value = sessionStorage.getItem(UNLOCK_TRANSACTION_KEY);
+    const value = localStorage.getItem(UNLOCK_TRANSACTION_KEY);
     if (!value) return undefined;
     const parsed = JSON.parse(value) as UnlockTransaction;
     if (
@@ -54,7 +55,8 @@ export function readUnlockTransaction(): UnlockTransaction | undefined {
       typeof parsed.codeVerifier === 'string' &&
       typeof parsed.redirectUri === 'string' &&
       typeof parsed.returnUrl === 'string' &&
-      typeof parsed.createdAt === 'number'
+      typeof parsed.createdAt === 'number' &&
+      typeof parsed.popup === 'boolean'
     ) {
       return parsed;
     }
@@ -65,9 +67,9 @@ export function readUnlockTransaction(): UnlockTransaction | undefined {
 }
 
 export function writeUnlockTransaction(transaction: UnlockTransaction): void {
-  sessionStorage.setItem(UNLOCK_TRANSACTION_KEY, JSON.stringify(transaction));
+  localStorage.setItem(UNLOCK_TRANSACTION_KEY, JSON.stringify(transaction));
 }
 
 export function clearUnlockTransaction(): void {
-  sessionStorage.removeItem(UNLOCK_TRANSACTION_KEY);
+  localStorage.removeItem(UNLOCK_TRANSACTION_KEY);
 }

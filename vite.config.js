@@ -39,6 +39,10 @@ const copyFiles = {
       dest: '',
     },
     {
+      src: 'public/kiconnect-lock-logo.png',
+      dest: '',
+    },
+    {
       src: 'public/kiconnect-app-icon-v5.png',
       dest: '',
     },
@@ -97,10 +101,7 @@ export default defineConfig({
   server: {
     port: 8088,
     host: true,
-    allowedHosts: [
-      'test.kiconnect.at',
-      'devcinny.kiconnect.at',
-    ],
+    allowedHosts: ['test.kiconnect.at', 'devcinny.kiconnect.at'],
     fs: {
       // Allow serving files from one level up to the project root
       allow: ['..'],
@@ -130,7 +131,9 @@ export default defineConfig({
       injectRegister: false,
       manifest: false,
       injectManifest: {
-        injectionPoint: undefined,
+        globPatterns: ['**/*.{html,js,css,wasm,woff2,ttf,ogg,png,ico}'],
+        globIgnores: ['config.json', 'manifest.json', 'public/element-call/**'],
+        maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
       },
       devOptions: {
         enabled: true,

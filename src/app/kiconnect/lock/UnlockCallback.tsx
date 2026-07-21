@@ -24,6 +24,7 @@ const decodeClaims = (token: string): IdTokenClaims => {
 
 export function UnlockCallback({ config }: Props): JSX.Element {
   const [error, setError] = useState<string>();
+  const [complete, setComplete] = useState(false);
 
   useEffect(() => {
     const complete = async () => {
@@ -76,8 +77,20 @@ export function UnlockCallback({ config }: Props): JSX.Element {
 
       const session = getFallbackSession();
       if (!session) throw new Error('Die Matrix-Sitzung ist nicht mehr vorhanden.');
-      writeLockRecord(session.userId, { locked: false, lastActivity: Date.now() });
+      const unlockedRecord = { locked: false, lastActivity: Date.now() };
+      writeLockRecord(session.userId, unlockedRecord);
       clearUnlockTransaction();
+      if (transaction.popup) {
+        if (typeof BroadcastChannel === 'function') {
+          const channel = new BroadcastChannel('kiconnect-lock-v1');
+          channel.postMessage(unlockedRecord);
+          channel.close();
+        }
+        window.opener?.postMessage({ type: 'kiconnect-unlock-success' }, window.location.origin);
+        setComplete(true);
+        window.setTimeout(() => window.close(), 150);
+        return;
+      }
       window.location.replace(transaction.returnUrl || '/');
     };
 
@@ -97,6 +110,13 @@ export function UnlockCallback({ config }: Props): JSX.Element {
             <p>{error}</p>
             <button type="button" onClick={() => window.location.replace('/')}>
               Zurück zum Sperrbildschirm
+            </button>
+          </>
+        ) : complete ? (
+          <>
+            <p>Client wurde entsperrt.</p>
+            <button type="button" onClick={() => window.close()}>
+              Fenster schließen
             </button>
           </>
         ) : (

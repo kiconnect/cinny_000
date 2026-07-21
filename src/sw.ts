@@ -1,7 +1,14 @@
 /// <reference lib="WebWorker" />
 
+import { cleanupOutdatedCaches, precacheAndRoute } from 'workbox-precaching';
+
 export type {};
-declare const self: ServiceWorkerGlobalScope;
+declare const self: ServiceWorkerGlobalScope & {
+  __WB_MANIFEST: Array<{ revision: string | null; url: string }>;
+};
+
+cleanupOutdatedCaches();
+precacheAndRoute(self.__WB_MANIFEST);
 
 type SessionInfo = {
   accessToken: string;

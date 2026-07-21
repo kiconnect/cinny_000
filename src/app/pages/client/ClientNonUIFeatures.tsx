@@ -23,7 +23,7 @@ import { getMxIdLocalPart, mxcUrlToHttp } from '../../utils/matrix';
 import { useSelectedRoom } from '../../hooks/router/useSelectedRoom';
 import { useInboxNotificationsSelected } from '../../hooks/router/useInbox';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
-import { KiconnectLockProvider, useKiconnectLock } from '../../kiconnect/lock/LockProvider';
+import { useKiconnectLock } from '../../kiconnect/lock/LockProvider';
 
 const KIconnectLogo = '/kiconnect-app-icon-v5.png';
 const KIconnectFavicon = '/kiconnect-favicon-v6-48.png';
@@ -247,13 +247,13 @@ type ClientNonUIFeaturesProps = {
 
 export function ClientNonUIFeatures({ children }: ClientNonUIFeaturesProps) {
   return (
-    <KiconnectLockProvider>
+    <>
       <SystemEmojiFeature />
       <PageZoomFeature />
       <FaviconUpdater />
       <InviteNotifications />
       <MessageNotifications />
       {children}
-    </KiconnectLockProvider>
+    </>
   );
 }

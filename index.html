@@ -42,6 +42,125 @@
   <body id="appBody">
     <script>
       window.global ||= window;
+
+      (() => {
+        const lockPrefix = 'kiconnect.lock.v1.';
+        let locked = false;
+        try {
+          locked = Object.keys(localStorage).some((key) => {
+            if (!key.startsWith(lockPrefix)) return false;
+            return JSON.parse(localStorage.getItem(key) || '{}').locked === true;
+          });
+        } catch (_) {
+          locked = true;
+        }
+        if (!locked) return;
+
+        const shell = document.createElement('div');
+        shell.id = 'kiconnect-early-lock';
+        shell.style.cssText =
+          'position:fixed;inset:0;z-index:2147483647;display:grid;place-items:center;background:#f7fafb;color:#16343b;padding:24px;font-family:system-ui,sans-serif';
+        shell.innerHTML =
+          '<section style="width:min(100%,420px);text-align:center">' +
+          '<img src="/kiconnect-lock-logo.png" alt="KI connect" width="112" height="112" style="object-fit:contain">' +
+          '<h1 style="margin:16px 0 8px;font-size:28px">KI connect ist gesperrt</h1>' +
+          '<p style="margin:0 0 24px;color:#527079">Entsperren Sie die App sicher mit Ihrem Passkey.</p>' +
+          '<button id="kiconnect-early-unlock" type="button" style="width:100%;min-height:52px;border:0;border-radius:14px;background:#1e7f93;color:#fff;font-size:17px;font-weight:700;cursor:pointer;margin-bottom:12px">Client entsperren</button>' +
+          '<p id="kiconnect-early-error" style="color:#922536;font-weight:600"></p>' +
+          '</section>';
+        document.body.prepend(shell);
+
+        const removeWhenUnlocked = (record) => {
+          if (record?.locked === false) shell.remove();
+        };
+        window.addEventListener('storage', (event) => {
+          if (!event.key?.startsWith(lockPrefix) || !event.newValue) return;
+          try {
+            removeWhenUnlocked(JSON.parse(event.newValue));
+          } catch (_) {
+            // Ignore malformed data; React keeps the secure lock screen visible.
+          }
+        });
+        if (typeof BroadcastChannel === 'function') {
+          const channel = new BroadcastChannel('kiconnect-lock-v1');
+          channel.addEventListener('message', (event) => removeWhenUnlocked(event.data));
+        }
+
+        const button = document.getElementById('kiconnect-early-unlock');
+        const error = document.getElementById('kiconnect-early-error');
+        const base64Url = (bytes) => {
+          let binary = '';
+          bytes.forEach((byte) => {
+            binary += String.fromCharCode(byte);
+          });
+          return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+        };
+        const random = (length = 32) => {
+          const bytes = new Uint8Array(length);
+          crypto.getRandomValues(bytes);
+          return base64Url(bytes);
+        };
+
+        button.addEventListener('click', async () => {
+          button.disabled = true;
+          button.textContent = 'Sichere Anmeldung wird geöffnet …';
+          error.textContent = '';
+          const popup = window.open(
+            '',
+            `kiconnect-passkey-unlock-${Date.now()}`,
+            'popup=yes,width=520,height=720,resizable=yes,scrollbars=yes'
+          );
+          try {
+            const response = await fetch('/config.json', { cache: 'no-store' });
+            if (!response.ok) throw new Error('Konfiguration konnte nicht geladen werden.');
+            const config = await response.json();
+            const unlock = config.keycloakUnlock;
+            if (!unlock?.issuer || !unlock.clientId) {
+              throw new Error('Passkey-Entsperrung ist nicht konfiguriert.');
+            }
+            const codeVerifier = random(64);
+            const digest = await crypto.subtle.digest(
+              'SHA-256',
+              new TextEncoder().encode(codeVerifier)
+            );
+            const state = random();
+            const nonce = random();
+            const redirectUri = unlock.redirectUri || `${location.origin}/unlock/callback`;
+            localStorage.setItem(
+              'kiconnect.unlock.transaction.v1',
+              JSON.stringify({
+                state,
+                nonce,
+                codeVerifier,
+                redirectUri,
+                returnUrl: `${location.pathname}${location.search}${location.hash}`,
+                createdAt: Date.now(),
+                popup: Boolean(popup),
+              })
+            );
+            const issuer = unlock.issuer.replace(/\/$/, '');
+            const authorizeUrl = new URL(`${issuer}/protocol/openid-connect/auth`);
+            authorizeUrl.searchParams.set('client_id', unlock.clientId);
+            authorizeUrl.searchParams.set('redirect_uri', redirectUri);
+            authorizeUrl.searchParams.set('response_type', 'code');
+            authorizeUrl.searchParams.set('scope', 'openid');
+            authorizeUrl.searchParams.set('code_challenge_method', 'S256');
+            authorizeUrl.searchParams.set('code_challenge', base64Url(new Uint8Array(digest)));
+            authorizeUrl.searchParams.set('state', state);
+            authorizeUrl.searchParams.set('nonce', nonce);
+            authorizeUrl.searchParams.set('max_age', '0');
+            authorizeUrl.searchParams.set('prompt', 'login');
+            if (popup) popup.location.replace(authorizeUrl.toString());
+            else location.assign(authorizeUrl.toString());
+          } catch (reason) {
+            popup?.close();
+            button.disabled = false;
+            button.textContent = 'Client entsperren';
+            error.textContent =
+              reason instanceof Error ? reason.message : 'Entsperren fehlgeschlagen.';
+          }
+        });
+      })();
     </script>
     <div id="root"></div>
     <div id="portalContainer"></div>

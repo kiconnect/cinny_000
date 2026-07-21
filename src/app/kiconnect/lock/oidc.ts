@@ -20,7 +20,7 @@ const sha256Base64Url = async (value: string): Promise<string> => {
   return bytesToBase64Url(new Uint8Array(digest));
 };
 
-export async function beginPasskeyUnlock(config: ClientConfig): Promise<void> {
+export async function beginPasskeyUnlock(config: ClientConfig): Promise<Window | undefined> {
   const unlock = config.keycloakUnlock;
   if (!unlock?.issuer || !unlock.clientId) {
     throw new Error('Die Passkey-Entsperrung ist noch nicht konfiguriert.');
@@ -33,6 +33,19 @@ export async function beginPasskeyUnlock(config: ClientConfig): Promise<void> {
   const redirectUri = unlock.redirectUri ?? `${window.location.origin}/unlock/callback`;
   const returnUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
 
+  const popup = window.open(
+    '',
+    `kiconnect-passkey-unlock-${Date.now()}`,
+    'popup=yes,width=520,height=720,resizable=yes,scrollbars=yes'
+  );
+
+  if (popup) {
+    popup.document.title = 'KI connect entsperren';
+    popup.document.body.style.cssText =
+      'margin:0;min-height:100vh;display:grid;place-items:center;font:16px system-ui;background:#f7fafb;color:#16343b';
+    popup.document.body.textContent = 'Sichere Anmeldung wird geöffnet …';
+  }
+
   writeUnlockTransaction({
     state,
     nonce,
@@ -40,6 +53,7 @@ export async function beginPasskeyUnlock(config: ClientConfig): Promise<void> {
     redirectUri,
     returnUrl,
     createdAt: Date.now(),
+    popup: popup !== null,
   });
 
   const authorizeUrl = new URL(`${issuer}/protocol/openid-connect/auth`);
@@ -54,5 +68,12 @@ export async function beginPasskeyUnlock(config: ClientConfig): Promise<void> {
   authorizeUrl.searchParams.set('max_age', '0');
   authorizeUrl.searchParams.set('prompt', 'login');
 
+  if (popup) {
+    popup.location.replace(authorizeUrl.toString());
+    popup.focus();
+    return popup;
+  }
+
   window.location.assign(authorizeUrl.toString());
+  return undefined;
 }

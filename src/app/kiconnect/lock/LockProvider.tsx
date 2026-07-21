@@ -8,8 +8,9 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
+import { createClient, MatrixClient } from 'matrix-js-sdk';
 import { useClientConfig } from '../../hooks/useClientConfig';
+import { getFallbackSession } from '../../state/sessions';
 import { clientLogout } from '../logic/logout';
 import { beginPasskeyUnlock } from './oidc';
 import { LockRecord, lockStorageKey, readLockRecord, writeLockRecord } from './storage';
@@ -49,12 +50,12 @@ export const useKiconnectLock = (): LockContextValue => {
   return value;
 };
 
-type Props = { children: ReactNode };
+type Props = { children: ReactNode; mx?: MatrixClient };
 
-export function KiconnectLockProvider({ children }: Props): JSX.Element {
-  const mx = useMatrixClient();
+export function KiconnectLockProvider({ children, mx }: Props): JSX.Element {
   const config = useClientConfig();
-  const userId = mx.getSafeUserId();
+  const fallbackSession = getFallbackSession();
+  const userId = mx?.getUserId() ?? fallbackSession?.userId ?? 'unknown';
   const timeoutMs = Math.max(1, config.kiconnectLock?.timeoutMinutes ?? 5) * 60 * 1000;
   const initialRecord = useMemo(() => {
     const record = readLockRecord(userId);
@@ -74,6 +75,14 @@ export function KiconnectLockProvider({ children }: Props): JSX.Element {
   const lastWriteRef = useRef(initialRecord.lastActivity);
   const channelRef = useRef<BroadcastChannel>();
   const logoutInProgressRef = useRef(false);
+
+  useEffect(() => {
+    document.getElementById('kiconnect-early-lock')?.remove();
+    const current = readLockRecord(userId);
+    recordRef.current = current;
+    setLocked(current.locked);
+    setPrivacyShield(current.locked);
+  }, [userId]);
 
   const persist = useCallback(
     (record: LockRecord, broadcast = false) => {
@@ -119,6 +128,24 @@ export function KiconnectLockProvider({ children }: Props): JSX.Element {
       };
     }
     return undefined;
+  }, [userId]);
+
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (
+        event.origin !== window.location.origin ||
+        event.data?.type !== 'kiconnect-unlock-success'
+      ) {
+        return;
+      }
+      const record = readLockRecord(userId);
+      recordRef.current = record;
+      setLocked(record.locked);
+      setPrivacyShield(record.locked);
+      setUnlocking(false);
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
   }, [userId]);
 
   useEffect(() => {
@@ -194,7 +221,17 @@ export function KiconnectLockProvider({ children }: Props): JSX.Element {
     setUnlocking(true);
     setError(undefined);
     try {
-      await beginPasskeyUnlock(config);
+      const popup = await beginPasskeyUnlock(config);
+      if (popup) {
+        const popupWatcher = window.setInterval(() => {
+          if (!popup.closed) return;
+          window.clearInterval(popupWatcher);
+          if (recordRef.current.locked) {
+            setUnlocking(false);
+            setError('Die Entsperrung wurde abgebrochen.');
+          }
+        }, 400);
+      }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Entsperren fehlgeschlagen.');
       setUnlocking(false);
@@ -207,7 +244,18 @@ export function KiconnectLockProvider({ children }: Props): JSX.Element {
     setLoggingOut(true);
     setError(undefined);
     try {
-      await clientLogout(mx);
+      const logoutClient =
+        mx ??
+        (fallbackSession
+          ? createClient({
+              baseUrl: fallbackSession.baseUrl,
+              accessToken: fallbackSession.accessToken,
+              userId: fallbackSession.userId,
+              deviceId: fallbackSession.deviceId,
+            })
+          : undefined);
+      if (!logoutClient) throw new Error('Die lokale Sitzung ist nicht mehr vorhanden.');
+      await clientLogout(logoutClient);
     } catch (reason) {
       logoutInProgressRef.current = false;
       setError(reason instanceof Error ? reason.message : 'Vollständige Abmeldung fehlgeschlagen.');
@@ -239,7 +287,7 @@ export function KiconnectLockProvider({ children }: Props): JSX.Element {
           {locked && (
             <section style={{ width: 'min(100%, 420px)', textAlign: 'center' }}>
               <img
-                src="/kiconnect-icon-v5-512.png"
+                src="/kiconnect-lock-logo.png"
                 alt="KI-Connect"
                 style={{ width: 112, height: 112, objectFit: 'contain' }}
               />
@@ -253,7 +301,7 @@ export function KiconnectLockProvider({ children }: Props): JSX.Element {
                 disabled={unlocking || loggingOut}
                 style={primaryButtonStyle}
               >
-                {unlocking ? 'Passkey wird geöffnet …' : 'Client entsperren'}
+                {unlocking ? 'Sichere Anmeldung wurde geöffnet …' : 'Client entsperren'}
               </button>
               <button
                 type="button"
