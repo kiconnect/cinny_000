@@ -127,6 +127,9 @@ function ClientRootOptions({ mx }: { mx?: MatrixClient }) {
 const useLogoutListener = (mx?: MatrixClient) => {
   useEffect(() => {
     const handleLogout: HttpApiEventHandlerMap[HttpApiEvent.SessionLoggedOut] = async () => {
+      if ((window as typeof window & { __kiconnectFullLogout?: boolean }).__kiconnectFullLogout) {
+        return;
+      }
       mx?.stopClient();
       await mx?.clearStores();
       window.localStorage.clear();

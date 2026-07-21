@@ -13,6 +13,7 @@ import { createRouter } from './Router';
 import { ScreenSizeProvider, useScreenSize } from '../hooks/useScreenSize';
 import { useCompositionEndTracking } from '../hooks/useComposingCheck';
 import { UnlockCallback } from '../kiconnect/lock/UnlockCallback';
+import { LogoutCallback } from '../kiconnect/logic/LogoutCallback';
 
 const queryClient = new QueryClient();
 
@@ -38,6 +39,8 @@ function App() {
                   <ClientConfigProvider value={clientConfig}>
                     {window.location.pathname === '/unlock/callback' ? (
                       <UnlockCallback config={clientConfig} />
+                    ) : window.location.pathname === '/logout/callback' ? (
+                      <LogoutCallback />
                     ) : (
                       <QueryClientProvider client={queryClient}>
                         <JotaiProvider>

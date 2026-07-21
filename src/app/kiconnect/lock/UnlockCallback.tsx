@@ -1,7 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import type { ClientConfig } from '../../hooks/useClientConfig';
 import { getFallbackSession } from '../../state/sessions';
-import { clearUnlockTransaction, readUnlockTransaction, writeLockRecord } from './storage';
+import {
+  clearUnlockTransaction,
+  readUnlockTransaction,
+  UNLOCK_ID_TOKEN_KEY,
+  writeLockRecord,
+} from './storage';
 
 type Props = { config: ClientConfig };
 
@@ -77,17 +82,22 @@ export function UnlockCallback({ config }: Props): JSX.Element {
 
       const session = getFallbackSession();
       if (!session) throw new Error('Die Matrix-Sitzung ist nicht mehr vorhanden.');
+      localStorage.setItem(UNLOCK_ID_TOKEN_KEY, tokens.id_token);
       const unlockedRecord = { locked: false, lastActivity: Date.now() };
       writeLockRecord(session.userId, unlockedRecord);
       clearUnlockTransaction();
       if (transaction.popup) {
         if (typeof BroadcastChannel === 'function') {
           const channel = new BroadcastChannel('kiconnect-lock-v1');
-          channel.postMessage(unlockedRecord);
+          channel.postMessage({ ...unlockedRecord, idToken: tokens.id_token });
           channel.close();
         }
         window.opener?.postMessage(
-          { type: 'kiconnect-unlock-success', record: unlockedRecord },
+          {
+            type: 'kiconnect-unlock-success',
+            record: unlockedRecord,
+            idToken: tokens.id_token,
+          },
           window.location.origin
         );
         setComplete(true);

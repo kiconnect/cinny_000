@@ -1,5 +1,8 @@
 import type { MatrixClient } from 'matrix-js-sdk';
+import type { ClientConfig } from '../../hooks/useClientConfig';
 import { removeLocalWebPushSubscription } from '../push/webPush';
+import { UNLOCK_ID_TOKEN_KEY } from '../lock/storage';
+import { beginSilentLogoutAuthentication } from './logoutOidc';
 
 type KeycloakLogoutConfig = {
   issuer?: string;
@@ -7,27 +10,47 @@ type KeycloakLogoutConfig = {
   postLogoutRedirectUri?: string;
 };
 
-async function getKeycloakLogoutConfig(): Promise<KeycloakLogoutConfig> {
+async function getClientConfig(): Promise<ClientConfig> {
   try {
     const response = await fetch(`${import.meta.env.BASE_URL.replace(/\/$/, '')}/config.json`, {
       cache: 'no-store',
     });
     if (!response.ok) return {};
-    const config = await response.json();
-    return config?.keycloakLogout ?? {};
+    return (await response.json()) as ClientConfig;
   } catch {
     return {};
   }
 }
 
+function isUnexpiredIdToken(token: string): boolean {
+  try {
+    const payload = token.split('.')[1];
+    if (!payload) return false;
+    const base64 = payload
+      .replace(/-/g, '+')
+      .replace(/_/g, '/')
+      .padEnd(Math.ceil(payload.length / 4) * 4, '=');
+    const claims = JSON.parse(atob(base64)) as { exp?: number };
+    return typeof claims.exp === 'number' && claims.exp * 1000 > Date.now() + 5000;
+  } catch {
+    return false;
+  }
+}
+
 async function buildKeycloakLogoutUrl(): Promise<string> {
-  const config = await getKeycloakLogoutConfig();
+  const config: KeycloakLogoutConfig = (await getClientConfig()).keycloakLogout ?? {};
   const issuer = config.issuer ?? 'https://sso.id-am.at/realms/KIconnect';
-  const clientId = config.clientId ?? 'kiconnect-matrix';
+  const storedUnlockIdToken = localStorage.getItem(UNLOCK_ID_TOKEN_KEY) ?? undefined;
+  const unlockIdToken =
+    storedUnlockIdToken && isUnexpiredIdToken(storedUnlockIdToken)
+      ? storedUnlockIdToken
+      : undefined;
+  const clientId = storedUnlockIdToken ? 'kiconnect_cinny' : config.clientId ?? 'kiconnect-matrix';
   const postLogoutRedirect = config.postLogoutRedirectUri ?? `${window.location.origin}/`;
   const url = new URL(`${issuer}/protocol/openid-connect/logout`);
   url.searchParams.set('client_id', clientId);
   url.searchParams.set('post_logout_redirect_uri', postLogoutRedirect);
+  if (unlockIdToken) url.searchParams.set('id_token_hint', unlockIdToken);
   return url.toString();
 }
 
@@ -92,13 +115,31 @@ async function removeCurrentDevicePushers(mx: MatrixClient): Promise<void> {
   }
 }
 
-export async function clientLogout(mx: MatrixClient): Promise<void> {
-  if ('clearAppBadge' in navigator) {
-    await navigator.clearAppBadge().catch(() => undefined);
+export async function clientLogout(
+  mx: MatrixClient,
+  options?: { skipTokenAcquisition?: boolean; skipKeycloak?: boolean }
+): Promise<void> {
+  const storedToken = localStorage.getItem(UNLOCK_ID_TOKEN_KEY);
+  if (!options?.skipTokenAcquisition && (!storedToken || !isUnexpiredIdToken(storedToken))) {
+    await beginSilentLogoutAuthentication(await getClientConfig());
+    return;
   }
 
-  // Remove the current device's push endpoints before revoking its Matrix token.
-  await removeCurrentDevicePushers(mx);
+  (window as typeof window & { __kiconnectFullLogout?: boolean }).__kiconnectFullLogout = true;
+
+  // These independent preparations used to run serially and made logout time
+  // depend on the sum of several network roundtrips. Run them concurrently,
+  // while the Matrix token is still valid and local configuration still exists.
+  const badgeCleanup =
+    'clearAppBadge' in navigator
+      ? navigator.clearAppBadge().catch(() => undefined)
+      : Promise.resolve();
+  const [keycloakLogoutUrl] = await Promise.all([
+    buildKeycloakLogoutUrl(),
+    removeCurrentDevicePushers(mx),
+    removeLocalWebPushSubscription(),
+    badgeCleanup,
+  ]);
 
   // Storage synchronously first, then perform network logout and the potentially
   // slower IndexedDB cleanup in parallel. Local logout succeeds even if Keycloak
@@ -110,18 +151,16 @@ export async function clientLogout(mx: MatrixClient): Promise<void> {
     // Continue with server-side logout even if browser storage is unavailable.
   }
 
-  await Promise.allSettled([
-    mx.logout(),
-    deleteAllIndexedDBForOrigin(),
-    removeLocalWebPushSubscription(),
-  ]);
-
+  // Stop long-polling sync before deleting IndexedDB. This releases Matrix store
+  // handles earlier and avoids an intermittent wait on an active sync request.
   try {
     mx.stopClient();
   } catch {
     // The browser navigation below completes the logout hand-off.
   }
 
+  await Promise.allSettled([mx.logout(), deleteAllIndexedDBForOrigin()]);
+
   // Matrix and local state are gone; now terminate the Keycloak browser SSO.
-  window.location.assign(await buildKeycloakLogoutUrl());
+  window.location.replace(options?.skipKeycloak ? '/' : keycloakLogoutUrl);
 }

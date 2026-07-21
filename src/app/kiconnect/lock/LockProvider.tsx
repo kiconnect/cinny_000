@@ -19,6 +19,7 @@ import {
   lockStorageKey,
   readLockRecord,
   readUnlockTransaction,
+  UNLOCK_ID_TOKEN_KEY,
   writeLockRecord,
 } from './storage';
 
@@ -124,9 +125,12 @@ export function KiconnectLockProvider({ children, mx }: Props): JSX.Element {
     if (typeof BroadcastChannel === 'function') {
       const channel = new BroadcastChannel(CHANNEL_NAME);
       channelRef.current = channel;
-      channel.onmessage = (event: MessageEvent<LockRecord>) => {
+      channel.onmessage = (event: MessageEvent<LockRecord & { idToken?: string }>) => {
         const record = event.data;
         if (!record || typeof record.locked !== 'boolean') return;
+        if (typeof record.idToken === 'string') {
+          localStorage.setItem(UNLOCK_ID_TOKEN_KEY, record.idToken);
+        }
         recordRef.current = record;
         writeLockRecord(userId, record);
         setLocked(record.locked);
@@ -157,6 +161,9 @@ export function KiconnectLockProvider({ children, mx }: Props): JSX.Element {
         messageRecord?.locked === false && typeof messageRecord.lastActivity === 'number'
           ? { locked: false, lastActivity: messageRecord.lastActivity }
           : { locked: false, lastActivity: Date.now() };
+      if (typeof event.data?.idToken === 'string') {
+        localStorage.setItem(UNLOCK_ID_TOKEN_KEY, event.data.idToken);
+      }
       recordRef.current = record;
       writeLockRecord(userId, record);
       clearUnlockTransaction();

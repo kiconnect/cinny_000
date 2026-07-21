@@ -99,9 +99,23 @@
             // Ignore malformed data; React keeps the secure lock screen visible.
           }
         });
+        window.addEventListener('message', (event) => {
+          if (
+            event.origin === window.location.origin &&
+            event.data?.type === 'kiconnect-unlock-success' &&
+            typeof event.data?.idToken === 'string'
+          ) {
+            localStorage.setItem('kiconnect.unlock.id-token.v1', event.data.idToken);
+          }
+        });
         if (typeof BroadcastChannel === 'function') {
           const channel = new BroadcastChannel('kiconnect-lock-v1');
-          channel.addEventListener('message', (event) => showLoadingAfterUnlock(event.data));
+          channel.addEventListener('message', (event) => {
+            if (typeof event.data?.idToken === 'string') {
+              localStorage.setItem('kiconnect.unlock.id-token.v1', event.data.idToken);
+            }
+            showLoadingAfterUnlock(event.data);
+          });
         }
 
         const button = document.getElementById('kiconnect-early-unlock');

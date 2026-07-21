@@ -16,6 +16,7 @@ export type UnlockTransaction = {
 
 const LOCK_PREFIX = 'kiconnect.lock.v1.';
 export const UNLOCK_TRANSACTION_KEY = 'kiconnect.unlock.transaction.v1';
+export const UNLOCK_ID_TOKEN_KEY = 'kiconnect.unlock.id-token.v1';
 
 export const lockStorageKey = (userId: string): string =>
   `${LOCK_PREFIX}${encodeURIComponent(userId)}`;
