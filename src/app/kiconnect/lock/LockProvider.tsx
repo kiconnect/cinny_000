@@ -73,9 +73,11 @@ export function KiconnectLockProvider({ children }: Props): JSX.Element {
   const recordRef = useRef<LockRecord>(initialRecord);
   const lastWriteRef = useRef(initialRecord.lastActivity);
   const channelRef = useRef<BroadcastChannel>();
+  const logoutInProgressRef = useRef(false);
 
   const persist = useCallback(
     (record: LockRecord, broadcast = false) => {
+      if (logoutInProgressRef.current) return;
       recordRef.current = record;
       writeLockRecord(userId, record);
       if (broadcast) channelRef.current?.postMessage(record);
@@ -163,7 +165,12 @@ export function KiconnectLockProvider({ children }: Props): JSX.Element {
   useEffect(() => {
     const hide = () => {
       setPrivacyShield(true);
-      persist({ ...recordRef.current, backgroundAt: Date.now() }, false);
+      const now = Date.now();
+      const record = recordRef.current.locked
+        ? { ...recordRef.current, backgroundAt: now }
+        : { locked: false, lastActivity: now, backgroundAt: now };
+      lastWriteRef.current = now;
+      persist(record, false);
     };
     const visibility = () => {
       if (document.visibilityState === 'hidden') {
@@ -196,11 +203,13 @@ export function KiconnectLockProvider({ children }: Props): JSX.Element {
 
   const logout = async () => {
     if (loggingOut) return;
+    logoutInProgressRef.current = true;
     setLoggingOut(true);
     setError(undefined);
     try {
       await clientLogout(mx);
     } catch (reason) {
+      logoutInProgressRef.current = false;
       setError(reason instanceof Error ? reason.message : 'Vollständige Abmeldung fehlgeschlagen.');
       setLoggingOut(false);
     }
@@ -230,7 +239,7 @@ export function KiconnectLockProvider({ children }: Props): JSX.Element {
           {locked && (
             <section style={{ width: 'min(100%, 420px)', textAlign: 'center' }}>
               <img
-                src="/kiconnect-app-icon-v3.png"
+                src="/kiconnect-icon-v5-512.png"
                 alt="KI-Connect"
                 style={{ width: 112, height: 112, objectFit: 'contain' }}
               />

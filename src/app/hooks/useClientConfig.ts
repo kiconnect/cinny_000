@@ -23,6 +23,10 @@ export type ClientConfig = {
   kiconnectLock?: {
     timeoutMinutes?: number;
   };
+  webPush?: {
+    gatewayUrl?: string;
+    vapidPublicKey?: string;
+  };
 
   featuredCommunities?: {
     openAsDefault?: boolean;

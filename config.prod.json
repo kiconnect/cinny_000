@@ -6,7 +6,7 @@
   "hidePasswordLogin": true,
   "keycloakLogout": {
     "issuer": "https://sso.id-am.at/realms/KIconnect",
-    "clientId": "kiconnect_cinny"
+    "clientId": "kiconnect-matrix"
   },
   "keycloakUnlock": {
     "issuer": "https://sso.id-am.at/realms/KIconnect",

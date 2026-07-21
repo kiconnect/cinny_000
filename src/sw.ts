@@ -89,6 +89,83 @@ self.addEventListener('activate', (event: ExtendableEvent) => {
   );
 });
 
+self.addEventListener('push', (event: PushEvent) => {
+  let payload: {
+    title?: string;
+    body?: string;
+    url?: string;
+    notification?: {
+      title?: string;
+      body?: string;
+      navigate?: string;
+      app_badge?: string;
+      data?: { badge_count?: number };
+    };
+  } = {};
+  try {
+    payload = event.data?.json() ?? {};
+  } catch {
+    payload = {};
+  }
+  const proposedNotification = (
+    event as PushEvent & {
+      notification?: Notification & { navigate?: string };
+    }
+  ).notification;
+  const notification = payload.notification ?? payload;
+  const proposedData = proposedNotification?.data as { badge_count?: number } | undefined;
+  const badgeCount = Number(notification.app_badge ?? proposedData?.badge_count);
+  const badgePromise =
+    Number.isFinite(badgeCount) && badgeCount > 0 && 'setAppBadge' in self.navigator
+      ? (
+          self.navigator as unknown as {
+            setAppBadge: (count: number) => Promise<void>;
+          }
+        ).setAppBadge(badgeCount)
+      : Promise.resolve();
+  event.waitUntil(
+    Promise.all([
+      badgePromise,
+      self.registration.showNotification(
+        notification.title || proposedNotification?.title || 'KI-Connect',
+        {
+          body: notification.body || proposedNotification?.body || 'Neue Nachricht in KI-Connect',
+          data: {
+            url:
+              notification.navigate ||
+              proposedNotification?.navigate ||
+              proposedNotification?.data?.url ||
+              payload.url ||
+              '/',
+          },
+        }
+      ),
+    ])
+  );
+});
+
+self.addEventListener('notificationclick', (event: NotificationEvent) => {
+  event.notification.close();
+  if ('clearAppBadge' in self.navigator) {
+    (
+      self.navigator as unknown as {
+        clearAppBadge: () => Promise<void>;
+      }
+    ).clearAppBadge();
+  }
+  const targetUrl = new URL(event.notification.data?.url || '/', self.location.origin).href;
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (clients) => {
+      const existing = clients.find((client) => client.url.startsWith(self.location.origin));
+      if (existing) {
+        await existing.navigate(targetUrl);
+        return existing.focus();
+      }
+      return self.clients.openWindow(targetUrl);
+    })
+  );
+});
+
 /**
  * Receive session updates from clients
  */

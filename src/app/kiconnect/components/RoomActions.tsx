@@ -1,22 +1,22 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { Box, Button, Dialog, Overlay, OverlayBackdrop, OverlayCenter, Text } from "folds";
-import type { Room } from "matrix-js-sdk/src/matrix";
-import type { MatrixClient } from "matrix-js-sdk";
-import { useMatrixClient } from "../../hooks/useMatrixClient";
-import { useSelectedSpace } from "../../hooks/router/useSelectedSpace";
+import React, { useEffect, useMemo, useState } from 'react';
+import { Box, Button, Dialog, Overlay, OverlayBackdrop, OverlayCenter, Text } from 'folds';
+import type { Room } from 'matrix-js-sdk/src/matrix';
+import type { MatrixClient } from 'matrix-js-sdk';
+import { useMatrixClient } from '../../hooks/useMatrixClient';
+import { useSelectedSpace } from '../../hooks/router/useSelectedSpace';
 
-import { getRoomOwner, isPatientRoom, isTeamRoom } from "../logic/roomState";
-import { delete_done } from "../logic/delete_done";
-import KiconnectSearchDialog from "../components/KiconnectSearchDialog";
+import { getRoomOwner, isPatientRoom, isTeamRoom } from '../logic/roomState';
+import { delete_done } from '../logic/delete_done';
+import KiconnectSearchDialog from '../components/KiconnectSearchDialog';
 
-import "../styles/RoomActions.css";
+import '../styles/RoomActions.css';
 
 type Props = {
   room: Room;
 };
 
-type CaseStatus = "open" | "done";
-type CaseRole = "arzt" | "team";
+type CaseStatus = 'open' | 'done';
+type CaseRole = 'arzt' | 'team';
 
 type CaseRoleEntry = {
   space_room_id?: string;
@@ -31,12 +31,14 @@ type CaseContent = {
 };
 
 function normalizeState(value: unknown): CaseStatus {
-  const norm = String(value || "").trim().toLowerCase();
-  return norm === "done" ? "done" : "open";
+  const norm = String(value || '')
+    .trim()
+    .toLowerCase();
+  return norm === 'done' ? 'done' : 'open';
 }
 
 function getRoleEntryState(entry: CaseRoleEntry | string | undefined): CaseStatus {
-  if (typeof entry === "string") {
+  if (typeof entry === 'string') {
     return normalizeState(entry);
   }
 
@@ -50,26 +52,26 @@ function getRoleFromSpaceId(
   if (!selectedSpaceId) return undefined;
 
   const roles = content?.roles;
-  if (!roles || typeof roles !== "object") return undefined;
+  if (!roles || typeof roles !== 'object') return undefined;
 
   const arzt = roles.arzt;
   if (
     arzt &&
-    typeof arzt === "object" &&
-    typeof arzt.space_room_id === "string" &&
+    typeof arzt === 'object' &&
+    typeof arzt.space_room_id === 'string' &&
     arzt.space_room_id === selectedSpaceId
   ) {
-    return "arzt";
+    return 'arzt';
   }
 
   const team = roles.team;
   if (
     team &&
-    typeof team === "object" &&
-    typeof team.space_room_id === "string" &&
+    typeof team === 'object' &&
+    typeof team.space_room_id === 'string' &&
     team.space_room_id === selectedSpaceId
   ) {
-    return "team";
+    return 'team';
   }
 
   return undefined;
@@ -80,17 +82,17 @@ function getRoleFromCurrentUser(
   content: CaseContent | undefined
 ): CaseRole | undefined {
   const roles = content?.roles;
-  if (!roles || typeof roles !== "object") return undefined;
+  if (!roles || typeof roles !== 'object') return undefined;
 
-  for (const role of ["arzt", "team"] as const) {
+  for (const role of ['arzt', 'team'] as const) {
     const entry = roles[role];
-    if (!entry || typeof entry !== "object") continue;
+    if (!entry || typeof entry !== 'object') continue;
 
     const spaceRoomId = entry.space_room_id;
-    if (typeof spaceRoomId !== "string" || !spaceRoomId) continue;
+    if (typeof spaceRoomId !== 'string' || !spaceRoomId) continue;
 
     const membership = mx.getRoom(spaceRoomId)?.getMyMembership?.();
-    if (membership === "join" || membership === "invite") {
+    if (membership === 'join' || membership === 'invite') {
       return role;
     }
   }
@@ -99,8 +101,8 @@ function getRoleFromCurrentUser(
 }
 
 function getOtherRole(role: CaseRole | undefined): CaseRole | undefined {
-  if (role === "arzt") return "team";
-  if (role === "team") return "arzt";
+  if (role === 'arzt') return 'team';
+  if (role === 'team') return 'arzt';
   return undefined;
 }
 
@@ -111,14 +113,14 @@ function getRoleSpaceRoomId(
   if (!role) return undefined;
 
   const entry = content?.roles?.[role];
-  if (!entry || typeof entry !== "object") return undefined;
+  if (!entry || typeof entry !== 'object') return undefined;
 
   const spaceRoomId = entry.space_room_id;
-  return typeof spaceRoomId === "string" && spaceRoomId.trim() ? spaceRoomId.trim() : undefined;
+  return typeof spaceRoomId === 'string' && spaceRoomId.trim() ? spaceRoomId.trim() : undefined;
 }
 
 function getCaseContent(room: Room): CaseContent | undefined {
-  const ev = room.currentState?.getStateEvents?.("io.kiconnect.case", "");
+  const ev = room.currentState?.getStateEvents?.('io.kiconnect.case', '');
   return ev?.getContent?.() as CaseContent | undefined;
 }
 
@@ -133,7 +135,7 @@ function getOwnRoleStatus(
   const spaceRoomId = selectedSpaceId?.trim() || getRoleSpaceRoomId(content, role);
 
   if (!role || !otherRole) {
-    return { role: undefined, own: "done", other: "done" };
+    return { role: undefined, own: 'done', other: 'done' };
   }
 
   return {
@@ -145,8 +147,8 @@ function getOwnRoleStatus(
 }
 
 function toErrString(e: unknown): string {
-  if (!e) return "unknown error";
-  if (typeof e === "string") return e;
+  if (!e) return 'unknown error';
+  if (typeof e === 'string') return e;
 
   const anyE = e as any;
 
@@ -161,7 +163,7 @@ function toErrString(e: unknown): string {
 }
 
 function isUsableSpaceId(value: unknown): value is string {
-  return typeof value === "string" && value.trim().startsWith("!");
+  return typeof value === 'string' && value.trim().startsWith('!');
 }
 
 export function KiconnectRoomActions({ room }: Props): JSX.Element {
@@ -170,6 +172,10 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
 
   const [showSearch, setShowSearch] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [showBroadcast, setShowBroadcast] = useState(false);
+  const [broadcastPreview, setBroadcastPreview] = useState(false);
+  const [broadcastMessage, setBroadcastMessage] = useState('');
+  const [sendingBroadcast, setSendingBroadcast] = useState(false);
   const [, forceUpdate] = useState(0);
   const [sending, setSending] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -178,20 +184,14 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
   const caseInfo = getOwnRoleStatus(mx, room, selectedSpaceId);
   const roomOwner = getRoomOwner(room);
   const patientRoomOwner =
-    isPatientRoom(room) &&
-    (roomOwner ? roomOwner === mx.getUserId() : caseInfo.role === undefined);
+    isPatientRoom(room) && (roomOwner ? roomOwner === mx.getUserId() : caseInfo.role === undefined);
 
-  const erledigtLabel = caseInfo.own === "done" ? "Wieder öffnen" : "Erledigt";
+  const erledigtLabel = caseInfo.own === 'done' ? 'Wieder öffnen' : 'Erledigt';
 
-  const canForward =
-    !!caseInfo.role &&
-    caseInfo.own === "open" &&
-    caseInfo.other === "done";
+  const canForward = !!caseInfo.role && caseInfo.own === 'open' && caseInfo.other === 'done';
 
   const forwardLabel =
-    caseInfo.own === "done" && caseInfo.other === "open"
-      ? "Weitergeleitet"
-      : "Weiterleiten";
+    caseInfo.own === 'done' && caseInfo.other === 'open' ? 'Weitergeleitet' : 'Weiterleiten';
 
   useEffect(() => {
     if (teamRoom) return;
@@ -200,17 +200,17 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
       const type = event?.getType?.();
       const stateKey = event?.getStateKey?.();
 
-      if (stateKey !== "") return;
+      if (stateKey !== '') return;
 
-      if (type === "io.kiconnect.case" || type === "io.kiconnect.room") {
+      if (type === 'io.kiconnect.case' || type === 'io.kiconnect.room') {
         forceUpdate((x) => x + 1);
       }
     };
 
-    room.on("RoomState.events", handler);
+    room.on('RoomState.events', handler);
 
     return () => {
-      room.off("RoomState.events", handler);
+      room.off('RoomState.events', handler);
     };
   }, [room, teamRoom]);
 
@@ -224,6 +224,46 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
     }
   };
 
+  const closeBroadcast = () => {
+    if (sendingBroadcast) return;
+    setShowBroadcast(false);
+    setBroadcastPreview(false);
+    setBroadcastMessage('');
+  };
+
+  const onSendBroadcast = async () => {
+    const message = broadcastMessage.trim();
+    if (sendingBroadcast) return;
+    if (!selectedSpaceId) {
+      setErr('Kein Ordinations-Space ausgewählt.');
+      return;
+    }
+    if (!message || message.length > 4000) {
+      setErr('Die Rundnachricht muss zwischen 1 und 4000 Zeichen lang sein.');
+      return;
+    }
+
+    setSendingBroadcast(true);
+    setErr(null);
+    try {
+      await mx.sendEvent(room.roomId, 'io.kiconnect.broadcast.request', {
+        request_id: crypto.randomUUID(),
+        space_room_id: selectedSpaceId,
+        message,
+        created_by: mx.getUserId(),
+        created_at: Date.now(),
+      });
+      setShowBroadcast(false);
+      setBroadcastPreview(false);
+      setBroadcastMessage('');
+      setErr('Rundnachricht wurde zur Zustellung übergeben.');
+    } catch (e) {
+      setErr(toErrString(e));
+    } finally {
+      setSendingBroadcast(false);
+    }
+  };
+
   const onToggleDone = async () => {
     if (sending) return;
 
@@ -234,10 +274,10 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
       const spaceRoomId = caseInfo.spaceRoomId?.trim();
 
       if (!isUsableSpaceId(spaceRoomId)) {
-        throw new Error("Keine gültige User-Space-ID verfügbar.");
+        throw new Error('Keine gültige User-Space-ID verfügbar.');
       }
 
-      await mx.sendEvent(room.roomId, "io.kiconnect.case.toggle", {
+      await mx.sendEvent(room.roomId, 'io.kiconnect.case.toggle', {
         by: mx.getUserId(),
         ts: Date.now(),
         space_room_id: spaceRoomId,
@@ -250,7 +290,7 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
   };
 
   const onForward = async () => {
-    console.log("[FORWARD] click", {
+    console.log('[FORWARD] click', {
       sending,
       roomId: room.roomId,
       selectedSpaceId,
@@ -258,7 +298,7 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
     });
 
     if (sending) {
-      console.log("[FORWARD] abort sending=true");
+      console.log('[FORWARD] abort sending=true');
       return;
     }
 
@@ -267,28 +307,28 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
 
     try {
       const spaceRoomId = caseInfo.spaceRoomId?.trim();
-      console.log("[FORWARD] spaceRoomId", spaceRoomId);
+      console.log('[FORWARD] spaceRoomId', spaceRoomId);
 
       if (!isUsableSpaceId(spaceRoomId)) {
-        console.log("[FORWARD] abort invalid spaceRoomId");
-        throw new Error("Keine gültige User-Space-ID verfügbar.");
+        console.log('[FORWARD] abort invalid spaceRoomId');
+        throw new Error('Keine gültige User-Space-ID verfügbar.');
       }
 
-      console.log("[FORWARD] before sendEvent");
+      console.log('[FORWARD] before sendEvent');
 
-      const res = await mx.sendEvent(room.roomId, "io.kiconnect.case.forward", {
+      const res = await mx.sendEvent(room.roomId, 'io.kiconnect.case.forward', {
         by: mx.getUserId(),
         ts: Date.now(),
         space_room_id: spaceRoomId,
       });
 
-      console.log("[FORWARD] sendEvent ok", res);
+      console.log('[FORWARD] sendEvent ok', res);
     } catch (e) {
-      console.error("[FORWARD] sendEvent error", e);
+      console.error('[FORWARD] sendEvent error', e);
       setErr(toErrString(e));
     } finally {
       setSending(false);
-      console.log("[FORWARD] finally");
+      console.log('[FORWARD] finally');
     }
   };
 
@@ -299,9 +339,9 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
     setErr(null);
 
     try {
-      await mx.sendEvent(room.roomId, "m.room.message", {
-        msgtype: "m.text",
-        body: "storno!",
+      await mx.sendEvent(room.roomId, 'm.room.message', {
+        msgtype: 'm.text',
+        body: 'storno!',
       });
       setShowResetConfirm(false);
     } catch (e) {
@@ -315,16 +355,113 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
     return (
       <>
         {showSearch && (
-          <KiconnectSearchDialog
-            room={room}
-            onFinished={() => setShowSearch(false)}
-          />
+          <KiconnectSearchDialog room={room} onFinished={() => setShowSearch(false)} />
+        )}
+        {showBroadcast && (
+          <Overlay open backdrop={<OverlayBackdrop />}>
+            <OverlayCenter>
+              <Dialog variant="Surface" style={{ width: 'min(560px, calc(100vw - 32px))' }}>
+                <Box direction="Column" gap="400" style={{ padding: 24 }}>
+                  <Box direction="Column" gap="200">
+                    <Text size="H4">Rundnachricht</Text>
+                    <Text priority="400">
+                      Diese Nachricht wird einzeln an alle Patienten der Ordination gesendet.
+                    </Text>
+                  </Box>
+
+                  {broadcastPreview ? (
+                    <Box direction="Column" gap="200">
+                      <Text weight="Medium">Vorschau</Text>
+                      <div
+                        style={{
+                          whiteSpace: 'pre-wrap',
+                          border: '1px solid #b8c7cb',
+                          borderRadius: 12,
+                          padding: 16,
+                          maxHeight: 260,
+                          overflow: 'auto',
+                        }}
+                      >
+                        <strong>Mitteilung Ihrer Ordination</strong>
+                        {'\n\n'}
+                        {broadcastMessage.trim()}
+                      </div>
+                      <Text priority="400">
+                        Bitte prüfen Sie den Text sorgfältig. Der Versand an alle Patienten kann
+                        nicht zurückgenommen werden.
+                      </Text>
+                    </Box>
+                  ) : (
+                    <textarea
+                      value={broadcastMessage}
+                      onChange={(event) => setBroadcastMessage(event.target.value)}
+                      maxLength={4000}
+                      rows={9}
+                      autoFocus
+                      placeholder="Nachricht an alle Patienten …"
+                      style={{
+                        width: '100%',
+                        boxSizing: 'border-box',
+                        resize: 'vertical',
+                        border: '1px solid #8ca4aa',
+                        borderRadius: 12,
+                        padding: 14,
+                        font: 'inherit',
+                      }}
+                    />
+                  )}
+
+                  {err && <Text size="T300">{err}</Text>}
+                  <Box direction="Row" gap="200" justifyContent="End">
+                    <Button
+                      variant="Secondary"
+                      onClick={closeBroadcast}
+                      disabled={sendingBroadcast}
+                    >
+                      Abbrechen
+                    </Button>
+                    {broadcastPreview ? (
+                      <>
+                        <Button
+                          variant="Secondary"
+                          onClick={() => setBroadcastPreview(false)}
+                          disabled={sendingBroadcast}
+                        >
+                          Text bearbeiten
+                        </Button>
+                        <Button onClick={onSendBroadcast} disabled={sendingBroadcast}>
+                          {sendingBroadcast ? 'Wird versendet …' : 'An alle senden'}
+                        </Button>
+                      </>
+                    ) : (
+                      <Button
+                        onClick={() => {
+                          if (broadcastMessage.trim()) setBroadcastPreview(true);
+                        }}
+                        disabled={!broadcastMessage.trim()}
+                      >
+                        Vorschau
+                      </Button>
+                    )}
+                  </Box>
+                </Box>
+              </Dialog>
+            </OverlayCenter>
+          </Overlay>
         )}
 
         <div className="kiconnect-room-actions">
           <div className="kiconnect-room-actions-divider" />
           <button onClick={() => setShowSearch(true)}>Suche</button>
           <button onClick={onDeleteDone}>Erledigte Chats löschen</button>
+          <button
+            onClick={() => {
+              setErr(null);
+              setShowBroadcast(true);
+            }}
+          >
+            Rundnachricht
+          </button>
           {err && <span style={{ marginLeft: 8, fontSize: 12 }}>{err}</span>}
         </div>
       </>
@@ -337,7 +474,7 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
         {showResetConfirm && (
           <Overlay open backdrop={<OverlayBackdrop />}>
             <OverlayCenter>
-              <Dialog variant="Surface" style={{ width: "min(420px, calc(100vw - 32px))" }}>
+              <Dialog variant="Surface" style={{ width: 'min(420px, calc(100vw - 32px))' }}>
                 <Box direction="Column" gap="400" style={{ padding: 24 }}>
                   <Box direction="Column" gap="200">
                     <Text size="H4">Chat zurücksetzen</Text>
@@ -353,7 +490,7 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
                       Abbrechen
                     </Button>
                     <Button variant="Critical" onClick={onResetChat} disabled={sending}>
-                      {sending ? "Wird zurückgesetzt …" : "Chat zurücksetzen"}
+                      {sending ? 'Wird zurückgesetzt …' : 'Chat zurücksetzen'}
                     </Button>
                   </Box>
                 </Box>
@@ -367,9 +504,7 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
           <button onClick={() => setShowResetConfirm(true)} disabled={sending}>
             Chat zurücksetzen
           </button>
-          {err && !showResetConfirm && (
-            <span style={{ marginLeft: 8, fontSize: 12 }}>{err}</span>
-          )}
+          {err && !showResetConfirm && <span style={{ marginLeft: 8, fontSize: 12 }}>{err}</span>}
         </div>
       </>
     );
@@ -380,12 +515,12 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
       <div className="kiconnect-room-actions">
         <div className="kiconnect-room-actions-divider" />
         <button onClick={onToggleDone} disabled={sending}>
-          {sending ? "…" : erledigtLabel}
+          {sending ? '…' : erledigtLabel}
         </button>
 
         {canForward && (
           <button onClick={onForward} disabled={sending}>
-            {sending ? "…" : forwardLabel}
+            {sending ? '…' : forwardLabel}
           </button>
         )}
 

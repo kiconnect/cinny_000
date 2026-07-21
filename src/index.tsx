@@ -20,6 +20,17 @@ import { getFallbackSession } from './app/state/sessions';
 
 document.body.classList.add(configClass, varsClass);
 
+const clearAppBadge = () => {
+  if ('clearAppBadge' in navigator) {
+    navigator.clearAppBadge().catch(() => undefined);
+  }
+};
+
+clearAppBadge();
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') clearAppBadge();
+});
+
 // Register Service Worker
 if ('serviceWorker' in navigator) {
   const swUrl =

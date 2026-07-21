@@ -39,15 +39,15 @@ const copyFiles = {
       dest: '',
     },
     {
-      src: 'public/kiconnect-app-icon-v3.png',
+      src: 'public/kiconnect-app-icon-v5.png',
       dest: '',
     },
     {
-      src: 'public/kiconnect-icon-192.png',
+      src: 'public/kiconnect-favicon-v6*',
       dest: '',
     },
     {
-      src: 'public/kiconnect-icon-512.png',
+      src: 'public/kiconnect-icon-v5-*.png',
       dest: '',
     },
     {

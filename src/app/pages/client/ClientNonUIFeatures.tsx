@@ -25,7 +25,8 @@ import { useInboxNotificationsSelected } from '../../hooks/router/useInbox';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { KiconnectLockProvider, useKiconnectLock } from '../../kiconnect/lock/LockProvider';
 
-const KIconnectLogo = '/kiconnect-app-icon-v3.png';
+const KIconnectLogo = '/kiconnect-app-icon-v5.png';
+const KIconnectFavicon = '/kiconnect-favicon-v6-48.png';
 
 function SystemEmojiFeature() {
   const [twitterEmoji] = useSetting(settingsAtom, 'twitterEmoji');
@@ -55,7 +56,7 @@ function FaviconUpdater() {
   const roomToUnread = useAtomValue(roomToUnreadAtom);
 
   useEffect(() => {
-    setFavicon(KIconnectLogo);
+    setFavicon(KIconnectFavicon);
   }, [roomToUnread]);
 
   return null;

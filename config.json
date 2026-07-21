@@ -6,7 +6,7 @@
   "hidePasswordLogin": true,
   "keycloakLogout": {
     "issuer": "https://devsso.id-am.at/realms/KIconnect",
-    "clientId": "kiconnect_cinny"
+    "clientId": "kiconnect-matrix"
   },
   "keycloakUnlock": {
     "issuer": "https://devsso.id-am.at/realms/KIconnect",
@@ -15,6 +15,10 @@
   },
   "kiconnectLock": {
     "timeoutMinutes": 5
+  },
+  "webPush": {
+    "gatewayUrl": "https://devpush.kiconnect.at",
+    "vapidPublicKey": "BPl2wkmkf0y-OQhKZb83CJP5wYSMiMqq_Q-ZT5Y6ZZOSVt8swXhv_4MoKnOr3nLdGwDOtgL2SB-bAT7DABvUHuw"
   },
 
   "appearance": {

@@ -38,7 +38,7 @@ Produktivwerte, die nach dem Build in dist/config.json stehen muessen:
    homeserverList: kiconnect.at
    hidePasswordLogin: true
    keycloakLogout.issuer: https://sso.id-am.at/realms/KIconnect
-   keycloakLogout.clientId: kiconnect_cinny
+   keycloakLogout.clientId: kiconnect-matrix
    keycloakUnlock.issuer: https://sso.id-am.at/realms/KIconnect
    keycloakUnlock.clientId: kiconnect_cinny
    keycloakUnlock.redirectUri: https://cinny.kiconnect.at/unlock/callback
@@ -61,21 +61,26 @@ Fuer Produktiv immer:
 Keycloak-Check am Produktivsystem
 ---------------------------------
 
-Im Realm KIconnect muss der Client kiconnect_cinny zur produktiven Cinny-Adresse passen:
+Im Realm KIconnect muss der Client kiconnect-matrix zur produktiven Cinny-Adresse passen:
 
 - Valid Redirect URIs: https://cinny.kiconnect.at/*
 - Web Origins: https://cinny.kiconnect.at
 - Valid post logout redirect URIs: https://cinny.kiconnect.at/* oder +
 
+Der Logout muss den Client kiconnect-matrix verwenden, weil genau dieser Client
+die Keycloak-Sitzung bei der Matrix-Anmeldung eroeffnet. kiconnect_cinny wird nur
+fuer die separate Passkey-Entsperrung verwendet. Wird beim Logout faelschlich
+kiconnect_cinny verwendet, kann die Matrix-Sitzung zwar beendet werden, die
+Keycloak-SSO-Sitzung bleibt jedoch bestehen.
+
 Der Logout-Code setzt folgende Parameter:
 
-   client_id=kiconnect_cinny
+   client_id=kiconnect-matrix
    post_logout_redirect_uri=https://cinny.kiconnect.at/
 
 Keycloak vergleicht die post_logout_redirect_uri mit dem Client
-kiconnect_cinny. Der Matrix-OIDC-Client und dessen Synapse-Callback sind davon
-getrennt. Wenn nach Logout "Invalid redirect uri" erscheint, zuerst im Realm
-KIconnect unter Clients -> kiconnect_cinny -> Settings -> Logout settings die
+kiconnect-matrix. Wenn nach Logout "Invalid redirect uri" erscheint, zuerst im Realm
+KIconnect unter Clients -> kiconnect-matrix -> Settings -> Logout settings die
 "Valid post logout redirect URIs" pruefen. Eine Aenderung dort braucht keinen
 Neustart von Keycloak oder Cinny.
 
@@ -159,7 +164,8 @@ Der Dev-Keycloak-Client kiconnect_cinny braucht entsprechend:
 
    Valid Redirect URIs: https://devcinny.kiconnect.at/*
    Web Origins: https://devcinny.kiconnect.at
-   Valid post logout redirect URIs: https://devcinny.kiconnect.at/*
+   Valid post logout redirect URIs beim Client kiconnect-matrix:
+   https://devcinny.kiconnect.at/*
 
 Fuer die Entsperrung muss insbesondere dieser Callback erlaubt sein:
 
@@ -223,6 +229,102 @@ Sicherheits- und Oberflaechenfunktionen im gemeinsamen Build
   damit Edge die Anwendung als installierbare PWA erkennt.
 - "Invite Member" ist in der Raum-Einleitung global entfernt; Benutzer werden
   ausschliesslich ueber die vorgesehene KIconnect-Raumlogik verwaltet.
+- Raum-Owner sehen "Anmeldeart hinzufuegen". Der Dialog bietet einen additiven
+  Passkey-/Sicherheitsschluessel-Link oder den klassischen Zugang mit Passwort
+  und TOTP an. Cinny sendet dafuer das interne Event
+  `io.kiconnect.auth.add.request`; es erscheint kein Chatbefehl.
+- Der Passkey-Weg loescht oder ersetzt keine bestehenden Zugangsdaten. Beim
+  klassischen Weg wird das eine Keycloak-Passwort gesetzt beziehungsweise
+  aktualisiert und TOTP eingerichtet; bestehende Passkeys bleiben erhalten.
+- `resetauth!` bleibt davon getrennt und ist weiterhin nur der bewusst
+  versteckte Notfallweg zum gezielten Loeschen verlorener Zugangsdaten.
+
+Web-Push fuer die installierte PWA
+---------------------------------
+
+Cinny enthaelt im Drei-Punkte-Menue den Schalter "Push-Nachrichten: Ein/Aus".
+Beim Einschalten fragt die PWA nach der Betriebssystem-Berechtigung, erzeugt
+eine Web-Push-Subscription und registriert diese als Matrix-HTTP-Pusher. Beim
+Ausschalten werden der Pusher und die lokale Browser-Subscription entfernt.
+Ein vollstaendiger Logout entfernt sie ebenfalls. Der Gateway versendet nur den
+neutralen Text "Neue Nachricht in KI-Connect" und keine Patientendaten.
+
+Dev-Konfiguration in config.dev.json/config.json:
+
+   webPush.gatewayUrl: https://devpush.kiconnect.at
+   webPush.vapidPublicKey: <oeffentlicher Dev-VAPID-Schluessel>
+
+Fuer Dev sind zusaetzlich erforderlich:
+
+1. DNS-A-Record devpush.kiconnect.at auf die Caddy-Adresse.
+2. Eintrag auf der separaten Caddy-VM:
+
+   devpush.kiconnect.at {
+       encode zstd gzip
+       reverse_proxy http://192.168.20.197:8091
+   }
+
+3. Im Portal-Repository die nicht eingecheckte Datei .env.push aus
+   .env.push.example anlegen und den Gateway starten:
+
+   docker compose up -d --build push-gateway
+   curl https://devpush.kiconnect.at/health
+
+Der private VAPID-Schluessel darf niemals in Git oder in Cinny landen. Der
+Gateway ist zustandslos: Die vom Browser erzeugte Subscription wird in den
+Matrix-Pusher-Daten gespeichert; eine zusaetzliche SQLite-Datenbank ist nicht
+notwendig.
+
+Produktion braucht ein eigenes VAPID-Schluesselpaar. Im Portal-Repository:
+
+   python3 push_gateway/generate_vapid_keys.py
+
+Den privaten Schluessel und die Absenderadresse nur in .env.push speichern. Den
+ausgegebenen oeffentlichen Schluessel in config.prod.json unter
+webPush.vapidPublicKey eintragen und als gatewayUrl beispielsweise
+https://push.kiconnect.at verwenden. Danach DNS, Caddy-Reverse-Proxy auf Port
+8091, Gateway-Container und Cinny mit npm run build:prod ausrollen.
+
+Auf iPhone/iPad funktioniert Web-Push nur in der zum Home-Bildschirm
+hinzugefuegten PWA. Die Freigabe muss durch den Benutzer ueber den Schalter
+ausgeloest werden. Android und Desktop verwenden denselben Web-Push-Standard.
+
+Rundnachrichten an alle Patienten
+---------------------------------
+
+Im persoenlichen Teamraum zeigt Cinny den Button "Rundnachricht". Das Fenster
+enthaelt Texteingabe, Vorschau und eine zweite, eindeutige Bestaetigung "An alle
+senden". Cinny erzeugt danach im Teamraum das Matrix-Event:
+
+   io.kiconnect.broadcast.request
+
+Der Browser versendet nicht selbst an die Patienten. Der Ordinations-Bot prueft
+den Event-Absender gegen den in rooms.db gespeicherten Owner des Teamraums und
+akzeptiert nur die lokal gespeicherte Team- oder Arzt-Space-ID. Anschliessend
+sendet er die Nachricht einzeln in alle Patientenraeume aus seiner lokalen
+rooms.db. Patienten sehen dadurch niemals eine Empfaengerliste oder andere
+Patienten.
+
+Der Bot speichert Auftraege und Einzelzustellungen in:
+
+   /data/db/broadcasts.db
+
+Die request_id und deterministische Matrix-Transaktions-IDs verhindern einen
+doppelten Versand bei erneut zugestellten Events oder einem Neustart. Ein
+Broadcast aendert weder Anliegenstatus noch Betreff eines Patientenraums. Nach
+Abschluss schreibt der Bot Empfaenger-, Erfolgs- und Fehleranzahl in den
+ausloesenden Teamraum.
+
+Produktiv muessen deshalb zwei Repositories aktualisiert werden:
+
+1. Cinny bauen und den neuen dist/-Inhalt ausrollen.
+2. Im bots-Repository den Bot neu bauen und starten, zum Beispiel im jeweiligen
+   Ordinationsverzeichnis:
+
+   docker compose up -d --build nio-bot
+
+Die Broadcast-Datenbank wird beim ersten Auftrag automatisch angelegt. Keine
+manuelle SQL-Migration ist erforderlich.
 
 Abnahmetest nach Produktivdeployment
 ------------------------------------
@@ -243,3 +345,6 @@ Abnahmetest nach Produktivdeployment
    "Invalid redirect uri".
 9. PWA/Browser-Icon nach Entfernen einer alten Installation bzw. nach Leeren des
    Service-Worker-Caches pruefen.
+10. Im Teamraum "Rundnachricht" mit einem Testtext bis zur Vorschau pruefen.
+    Einen echten Versand nur in einer Testordination mit Testpatienten
+    bestaetigen. Danach den Abschlussbericht des Bots und broadcasts.db pruefen.

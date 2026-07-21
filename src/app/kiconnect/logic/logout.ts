@@ -1,4 +1,5 @@
 import type { MatrixClient } from 'matrix-js-sdk';
+import { removeLocalWebPushSubscription } from '../push/webPush';
 
 type KeycloakLogoutConfig = {
   issuer?: string;
@@ -22,7 +23,7 @@ async function getKeycloakLogoutConfig(): Promise<KeycloakLogoutConfig> {
 async function buildKeycloakLogoutUrl(): Promise<string> {
   const config = await getKeycloakLogoutConfig();
   const issuer = config.issuer ?? 'https://sso.id-am.at/realms/KIconnect';
-  const clientId = config.clientId ?? 'kiconnect_cinny';
+  const clientId = config.clientId ?? 'kiconnect-matrix';
   const postLogoutRedirect = config.postLogoutRedirectUri ?? `${window.location.origin}/`;
   const url = new URL(`${issuer}/protocol/openid-connect/logout`);
   url.searchParams.set('client_id', clientId);
@@ -92,6 +93,10 @@ async function removeCurrentDevicePushers(mx: MatrixClient): Promise<void> {
 }
 
 export async function clientLogout(mx: MatrixClient): Promise<void> {
+  if ('clearAppBadge' in navigator) {
+    await navigator.clearAppBadge().catch(() => undefined);
+  }
+
   // Remove the current device's push endpoints before revoking its Matrix token.
   await removeCurrentDevicePushers(mx);
 
@@ -105,7 +110,11 @@ export async function clientLogout(mx: MatrixClient): Promise<void> {
     // Continue with server-side logout even if browser storage is unavailable.
   }
 
-  await Promise.allSettled([mx.logout(), deleteAllIndexedDBForOrigin()]);
+  await Promise.allSettled([
+    mx.logout(),
+    deleteAllIndexedDBForOrigin(),
+    removeLocalWebPushSubscription(),
+  ]);
 
   try {
     mx.stopClient();
