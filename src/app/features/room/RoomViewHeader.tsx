@@ -75,7 +75,7 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(
   ({ room, requestClose, canAddAuth, requestAuthAdd }, ref) => {
     const mx = useMatrixClient();
     const clientConfig = useClientConfig();
-    const { lock } = useKiconnectLock();
+    const { canLock, lock } = useKiconnectLock();
     const { navigateRoom } = useRoomNavigate();
     const [loggingOut, setLoggingOut] = useState(false);
     const [pushStatus, setPushStatus] = useState<WebPushStatus>('off');
@@ -189,11 +189,13 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(
         </Box>
         <Line variant="Surface" size="300" />
         <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
-          <MenuItem onClick={handleLock} size="300" radii="300">
-            <Text style={{ flexGrow: 1, fontWeight: 700 }} as="span" size="T300" truncate>
-              Client sperren
-            </Text>
-          </MenuItem>
+          {canLock && (
+            <MenuItem onClick={handleLock} size="300" radii="300">
+              <Text style={{ flexGrow: 1, fontWeight: 700 }} as="span" size="T300" truncate>
+                Client sperren
+              </Text>
+            </MenuItem>
+          )}
           <MenuItem onClick={handleLogout} size="300" radii="300" disabled={loggingOut}>
             <Text style={{ flexGrow: 1, fontWeight: 700 }} as="span" size="T300" truncate>
               {loggingOut ? 'Abmeldung läuft …' : 'Vollständig abmelden'}

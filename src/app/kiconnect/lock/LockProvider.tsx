@@ -10,7 +10,14 @@ import React, {
 } from 'react';
 import { createClient, MatrixClient } from 'matrix-js-sdk';
 import { useClientConfig } from '../../hooks/useClientConfig';
+import { useSyncState } from '../../hooks/useSyncState';
 import { getFallbackSession } from '../../state/sessions';
+import {
+  detectAccountType,
+  KiconnectAccountType,
+  readAccountType,
+  writeAccountType,
+} from '../logic/accountType';
 import { clientLogout } from '../logic/logout';
 import { beginPasskeyUnlock } from './oidc';
 import {
@@ -25,6 +32,7 @@ import {
 
 type LockContextValue = {
   locked: boolean;
+  canLock: boolean;
   lock: () => void;
 };
 
@@ -64,9 +72,18 @@ export function KiconnectLockProvider({ children, mx }: Props): JSX.Element {
   const config = useClientConfig();
   const fallbackSession = getFallbackSession();
   const userId = mx?.getUserId() ?? fallbackSession?.userId ?? 'unknown';
+  const [accountType, setAccountType] = useState<KiconnectAccountType>(() =>
+    readAccountType(userId)
+  );
+  const isTeam = accountType === 'team';
   const timeoutMs = Math.max(1, config.kiconnectLock?.timeoutMinutes ?? 5) * 60 * 1000;
   const initialRecord = useMemo(() => {
     const record = readLockRecord(userId);
+    if (readAccountType(userId) === 'team') {
+      const unlockedRecord = { locked: false, lastActivity: Date.now() };
+      writeLockRecord(userId, unlockedRecord);
+      return unlockedRecord;
+    }
     if (!record.locked && Date.now() - record.lastActivity >= timeoutMs) {
       const expiredRecord = { ...record, locked: true };
       writeLockRecord(userId, expiredRecord);
@@ -87,13 +104,38 @@ export function KiconnectLockProvider({ children, mx }: Props): JSX.Element {
   const channelRef = useRef<BroadcastChannel>();
   const logoutInProgressRef = useRef(false);
 
+  useSyncState(
+    mx,
+    useCallback(
+      (state) => {
+        if (!mx || (state !== 'PREPARED' && state !== 'SYNCING')) return;
+        const detected = detectAccountType(mx);
+        writeAccountType(userId, detected);
+        setAccountType(detected);
+      },
+      [mx, userId]
+    )
+  );
+
   useEffect(() => {
     document.getElementById('kiconnect-early-lock')?.remove();
+    setAccountType(readAccountType(userId));
     const current = readLockRecord(userId);
     recordRef.current = current;
     setLocked(current.locked);
     setPrivacyShield(current.locked);
   }, [userId]);
+
+  useEffect(() => {
+    if (!isTeam) return;
+    const unlockedRecord = { locked: false, lastActivity: Date.now() };
+    recordRef.current = unlockedRecord;
+    lastWriteRef.current = unlockedRecord.lastActivity;
+    writeLockRecord(userId, unlockedRecord);
+    setLocked(false);
+    setPrivacyShield(false);
+    setUnlocking(false);
+  }, [isTeam, userId]);
 
   const persist = useCallback(
     (record: LockRecord, broadcast = false) => {
@@ -106,20 +148,25 @@ export function KiconnectLockProvider({ children, mx }: Props): JSX.Element {
   );
 
   const lock = useCallback(() => {
+    if (isTeam) return;
     const record = { ...recordRef.current, locked: true };
     persist(record, true);
     setLocked(true);
     setPrivacyShield(true);
-  }, [persist]);
+  }, [isTeam, persist]);
 
   const evaluateElapsedTime = useCallback(() => {
+    if (isTeam) {
+      setPrivacyShield(false);
+      return false;
+    }
     const record = recordRef.current;
     if (record.locked || Date.now() - record.lastActivity >= timeoutMs) {
       lock();
       return true;
     }
     return false;
-  }, [lock, timeoutMs]);
+  }, [isTeam, lock, timeoutMs]);
 
   useEffect(() => {
     if (typeof BroadcastChannel === 'function') {
@@ -131,10 +178,11 @@ export function KiconnectLockProvider({ children, mx }: Props): JSX.Element {
         if (typeof record.idToken === 'string') {
           localStorage.setItem(UNLOCK_ID_TOKEN_KEY, record.idToken);
         }
-        recordRef.current = record;
-        writeLockRecord(userId, record);
-        setLocked(record.locked);
-        setPrivacyShield(record.locked);
+        const effectiveRecord = isTeam ? { locked: false, lastActivity: Date.now() } : record;
+        recordRef.current = effectiveRecord;
+        writeLockRecord(userId, effectiveRecord);
+        setLocked(effectiveRecord.locked);
+        setPrivacyShield(effectiveRecord.locked);
         if (!record.locked) {
           clearUnlockTransaction();
           setUnlocking(false);
@@ -146,7 +194,7 @@ export function KiconnectLockProvider({ children, mx }: Props): JSX.Element {
       };
     }
     return undefined;
-  }, [userId]);
+  }, [isTeam, userId]);
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
@@ -179,13 +227,14 @@ export function KiconnectLockProvider({ children, mx }: Props): JSX.Element {
     const onStorage = (event: StorageEvent) => {
       if (event.key !== lockStorageKey(userId) || !event.newValue) return;
       const record = readLockRecord(userId);
+      if (isTeam) return;
       recordRef.current = record;
       setLocked(record.locked);
       setPrivacyShield(record.locked);
     };
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
-  }, [userId]);
+  }, [isTeam, userId]);
 
   useEffect(() => {
     evaluateElapsedTime();
@@ -290,12 +339,15 @@ export function KiconnectLockProvider({ children, mx }: Props): JSX.Element {
     }
   };
 
-  const contextValue = useMemo(() => ({ locked, lock }), [lock, locked]);
+  const contextValue = useMemo(
+    () => ({ locked: isTeam ? false : locked, canLock: !isTeam, lock }),
+    [isTeam, lock, locked]
+  );
 
   return (
     <LockContext.Provider value={contextValue}>
       {children}
-      {(locked || privacyShield) && (
+      {!isTeam && (locked || privacyShield) && (
         <div
           role={locked ? 'dialog' : 'presentation'}
           aria-modal={locked ? 'true' : undefined}

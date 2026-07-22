@@ -45,12 +45,17 @@
 
       (() => {
         const lockPrefix = 'kiconnect.lock.v1.';
+        const userId = localStorage.getItem('cinny_user_id');
+        if (!userId) return;
+        const accountType = localStorage.getItem(
+          `kiconnect.account-type.v1.${encodeURIComponent(userId)}`
+        );
+        if (accountType === 'team') return;
+
         let locked = false;
         try {
-          locked = Object.keys(localStorage).some((key) => {
-            if (!key.startsWith(lockPrefix)) return false;
-            return JSON.parse(localStorage.getItem(key) || '{}').locked === true;
-          });
+          const lockKey = `${lockPrefix}${encodeURIComponent(userId)}`;
+          locked = JSON.parse(localStorage.getItem(lockKey) || '{}').locked === true;
         } catch (_) {
           locked = true;
         }
