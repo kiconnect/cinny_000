@@ -24,6 +24,7 @@ import { useSelectedRoom } from '../../hooks/router/useSelectedRoom';
 import { useInboxNotificationsSelected } from '../../hooks/router/useInbox';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { useKiconnectLock } from '../../kiconnect/lock/LockProvider';
+import { TeamIdleMonitorProvider } from '../../kiconnect/idle/TeamIdleMonitor';
 
 const KIconnectLogo = '/kiconnect-app-icon-v5.png';
 const KIconnectFavicon = '/kiconnect-favicon-v6-48.png';
@@ -247,13 +248,13 @@ type ClientNonUIFeaturesProps = {
 
 export function ClientNonUIFeatures({ children }: ClientNonUIFeaturesProps) {
   return (
-    <>
+    <TeamIdleMonitorProvider>
       <SystemEmojiFeature />
       <PageZoomFeature />
       <FaviconUpdater />
       <InviteNotifications />
       <MessageNotifications />
       {children}
-    </>
+    </TeamIdleMonitorProvider>
   );
 }

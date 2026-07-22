@@ -8,7 +8,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { createClient, MatrixClient } from 'matrix-js-sdk';
+import { ClientEvent, createClient, MatrixClient, MatrixEvent } from 'matrix-js-sdk';
 import { useClientConfig } from '../../hooks/useClientConfig';
 import { useSyncState } from '../../hooks/useSyncState';
 import { getFallbackSession } from '../../state/sessions';
@@ -19,6 +19,13 @@ import {
   writeAccountType,
 } from '../logic/accountType';
 import { clientLogout } from '../logic/logout';
+import {
+  DEFAULT_IDLE_TIMEOUT_MINUTES,
+  KICONNECT_PREFERENCES_EVENT_TYPE,
+  parseIdleTimeoutMinutes,
+  readIdleTimeoutMinutes,
+  writeIdleTimeoutMinutes,
+} from '../logic/idlePreference';
 import { beginPasskeyUnlock } from './oidc';
 import {
   clearUnlockTransaction,
@@ -33,6 +40,9 @@ import {
 type LockContextValue = {
   locked: boolean;
   canLock: boolean;
+  accountType: KiconnectAccountType;
+  idleTimeoutMinutes: number;
+  setIdleTimeoutMinutes: (minutes: number) => Promise<void>;
   lock: () => void;
 };
 
@@ -72,11 +82,16 @@ export function KiconnectLockProvider({ children, mx }: Props): JSX.Element {
   const config = useClientConfig();
   const fallbackSession = getFallbackSession();
   const userId = mx?.getUserId() ?? fallbackSession?.userId ?? 'unknown';
+  const configuredDefault = parseIdleTimeoutMinutes(config.kiconnectLock?.timeoutMinutes);
+  const defaultIdleTimeoutMinutes = configuredDefault ?? DEFAULT_IDLE_TIMEOUT_MINUTES;
+  const [idleTimeoutMinutes, setIdleTimeoutMinutesState] = useState(() =>
+    readIdleTimeoutMinutes(userId, defaultIdleTimeoutMinutes)
+  );
   const [accountType, setAccountType] = useState<KiconnectAccountType>(() =>
     readAccountType(userId)
   );
   const isTeam = accountType === 'team';
-  const timeoutMs = Math.max(1, config.kiconnectLock?.timeoutMinutes ?? 5) * 60 * 1000;
+  const timeoutMs = idleTimeoutMinutes * 60 * 1000;
   const initialRecord = useMemo(() => {
     const record = readLockRecord(userId);
     if (readAccountType(userId) === 'team') {
@@ -104,6 +119,21 @@ export function KiconnectLockProvider({ children, mx }: Props): JSX.Element {
   const channelRef = useRef<BroadcastChannel>();
   const logoutInProgressRef = useRef(false);
 
+  const applyIdleTimeout = useCallback(
+    (minutes: number) => {
+      writeIdleTimeoutMinutes(userId, minutes);
+      setIdleTimeoutMinutesState(minutes);
+    },
+    [userId]
+  );
+
+  const readServerIdleTimeout = useCallback(() => {
+    if (!mx) return;
+    const content = mx.getAccountData(KICONNECT_PREFERENCES_EVENT_TYPE as any)?.getContent();
+    const minutes = parseIdleTimeoutMinutes(content?.idle_timeout_minutes);
+    if (minutes !== undefined) applyIdleTimeout(minutes);
+  }, [applyIdleTimeout, mx]);
+
   useSyncState(
     mx,
     useCallback(
@@ -112,19 +142,53 @@ export function KiconnectLockProvider({ children, mx }: Props): JSX.Element {
         const detected = detectAccountType(mx);
         writeAccountType(userId, detected);
         setAccountType(detected);
+        readServerIdleTimeout();
       },
-      [mx, userId]
+      [mx, readServerIdleTimeout, userId]
     )
   );
 
   useEffect(() => {
+    if (!mx) return undefined;
+    const onAccountData = (event: MatrixEvent) => {
+      if (event.getType() !== KICONNECT_PREFERENCES_EVENT_TYPE) return;
+      const minutes = parseIdleTimeoutMinutes(event.getContent()?.idle_timeout_minutes);
+      if (minutes !== undefined) applyIdleTimeout(minutes);
+    };
+    mx.on(ClientEvent.AccountData, onAccountData);
+    return () => mx.removeListener(ClientEvent.AccountData, onAccountData);
+  }, [applyIdleTimeout, mx]);
+
+  useEffect(() => {
     document.getElementById('kiconnect-early-lock')?.remove();
     setAccountType(readAccountType(userId));
+    setIdleTimeoutMinutesState(readIdleTimeoutMinutes(userId, defaultIdleTimeoutMinutes));
     const current = readLockRecord(userId);
     recordRef.current = current;
     setLocked(current.locked);
     setPrivacyShield(current.locked);
-  }, [userId]);
+  }, [defaultIdleTimeoutMinutes, userId]);
+
+  const setIdleTimeoutMinutes = useCallback(
+    async (minutes: number) => {
+      const validMinutes = parseIdleTimeoutMinutes(minutes);
+      if (validMinutes === undefined) {
+        throw new Error('Bitte eine ganze Zahl zwischen 1 und 120 eingeben.');
+      }
+      if (!mx) throw new Error('Die Einstellung kann derzeit nicht gespeichert werden.');
+      const existing =
+        mx.getAccountData(KICONNECT_PREFERENCES_EVENT_TYPE as any)?.getContent() ?? {};
+      await mx.setAccountData(
+        KICONNECT_PREFERENCES_EVENT_TYPE as any,
+        {
+          ...existing,
+          idle_timeout_minutes: validMinutes,
+        } as any
+      );
+      applyIdleTimeout(validMinutes);
+    },
+    [applyIdleTimeout, mx]
+  );
 
   useEffect(() => {
     if (!isTeam) return;
@@ -340,8 +404,15 @@ export function KiconnectLockProvider({ children, mx }: Props): JSX.Element {
   };
 
   const contextValue = useMemo(
-    () => ({ locked: isTeam ? false : locked, canLock: !isTeam, lock }),
-    [isTeam, lock, locked]
+    () => ({
+      locked: isTeam ? false : locked,
+      canLock: !isTeam,
+      accountType,
+      idleTimeoutMinutes,
+      setIdleTimeoutMinutes,
+      lock,
+    }),
+    [accountType, idleTimeoutMinutes, isTeam, lock, locked, setIdleTimeoutMinutes]
   );
 
   return (

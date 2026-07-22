@@ -10,6 +10,15 @@ type KeycloakLogoutConfig = {
   postLogoutRedirectUri?: string;
 };
 
+const CLEANUP_TIMEOUT_MS = 3000;
+
+const settleWithin = async (work: Promise<unknown>, timeoutMs = CLEANUP_TIMEOUT_MS) => {
+  await Promise.race([
+    work.catch(() => undefined),
+    new Promise<void>((resolve) => window.setTimeout(resolve, timeoutMs)),
+  ]);
+};
+
 async function getClientConfig(): Promise<ClientConfig> {
   try {
     const response = await fetch(`${import.meta.env.BASE_URL.replace(/\/$/, '')}/config.json`, {
@@ -134,12 +143,14 @@ export async function clientLogout(
     'clearAppBadge' in navigator
       ? navigator.clearAppBadge().catch(() => undefined)
       : Promise.resolve();
-  const [keycloakLogoutUrl] = await Promise.all([
-    buildKeycloakLogoutUrl(),
+  const keycloakLogoutUrlPromise = buildKeycloakLogoutUrl();
+  const preparationCleanup = Promise.allSettled([
     removeCurrentDevicePushers(mx),
     removeLocalWebPushSubscription(),
     badgeCleanup,
   ]);
+  const keycloakLogoutUrl = await keycloakLogoutUrlPromise;
+  await settleWithin(preparationCleanup);
 
   // Storage synchronously first, then perform network logout and the potentially
   // slower IndexedDB cleanup in parallel. Local logout succeeds even if Keycloak
@@ -159,7 +170,7 @@ export async function clientLogout(
     // The browser navigation below completes the logout hand-off.
   }
 
-  await Promise.allSettled([mx.logout(), deleteAllIndexedDBForOrigin()]);
+  await settleWithin(Promise.allSettled([mx.logout(), deleteAllIndexedDBForOrigin()]));
 
   // Matrix and local state are gone; now terminate the Keycloak browser SSO.
   window.location.replace(options?.skipKeycloak ? '/' : keycloakLogoutUrl);

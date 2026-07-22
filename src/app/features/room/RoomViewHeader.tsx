@@ -22,6 +22,7 @@ import {
   Badge,
   Button,
   Dialog,
+  Input,
 } from 'folds';
 import { useNavigate } from 'react-router-dom';
 import { Room } from 'matrix-js-sdk';
@@ -64,6 +65,7 @@ import {
   WebPushStatus,
 } from '../../kiconnect/push/webPush';
 import { getRoomOwner } from '../../kiconnect/logic/roomState';
+import { useTeamIdleMonitor } from '../../kiconnect/idle/TeamIdleMonitor';
 
 type RoomMenuProps = {
   room: Room;
@@ -75,12 +77,19 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(
   ({ room, requestClose, canAddAuth, requestAuthAdd }, ref) => {
     const mx = useMatrixClient();
     const clientConfig = useClientConfig();
-    const { canLock, lock } = useKiconnectLock();
+    const { accountType, canLock, idleTimeoutMinutes, setIdleTimeoutMinutes, lock } =
+      useKiconnectLock();
+    const idleMonitor = useTeamIdleMonitor();
     const { navigateRoom } = useRoomNavigate();
     const [loggingOut, setLoggingOut] = useState(false);
     const [pushStatus, setPushStatus] = useState<WebPushStatus>('off');
     const [changingPush, setChangingPush] = useState(false);
     const [pushError, setPushError] = useState<string>();
+    const [idleTimeoutInput, setIdleTimeoutInput] = useState(String(idleTimeoutMinutes));
+    const [savingIdleTimeout, setSavingIdleTimeout] = useState(false);
+    const [idleTimeoutMessage, setIdleTimeoutMessage] = useState<string>();
+
+    useEffect(() => setIdleTimeoutInput(String(idleTimeoutMinutes)), [idleTimeoutMinutes]);
 
     useEffect(() => {
       getWebPushStatus(mx)
@@ -118,6 +127,36 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(
       if (loggingOut) return;
       setLoggingOut(true);
       await clientLogout(mx);
+    };
+
+    const handleIdleTimeoutSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      if (savingIdleTimeout) return;
+      const minutes = Number(idleTimeoutInput);
+      if (!Number.isInteger(minutes) || minutes < 1 || minutes > 120) {
+        setIdleTimeoutMessage('Bitte eine ganze Zahl von 1 bis 120 eingeben.');
+        return;
+      }
+      setSavingIdleTimeout(true);
+      setIdleTimeoutMessage(undefined);
+      try {
+        if (
+          accountType === 'team' &&
+          (idleMonitor.status === 'permission-required' || idleMonitor.status === 'denied')
+        ) {
+          await idleMonitor.requestPermission();
+        }
+        await setIdleTimeoutMinutes(minutes);
+        setIdleTimeoutMessage('Gespeichert – gilt auf allen Geräten.');
+      } catch (error) {
+        setIdleTimeoutMessage(
+          error instanceof Error
+            ? error.message
+            : 'Die Einstellung konnte nicht gespeichert werden.'
+        );
+      } finally {
+        setSavingIdleTimeout(false);
+      }
     };
 
     return (
@@ -189,6 +228,51 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(
         </Box>
         <Line variant="Surface" size="300" />
         <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
+          <form onSubmit={handleIdleTimeoutSubmit} style={{ padding: config.space.S100 }}>
+            <Text as="label" htmlFor="kiconnect-idle-timeout" size="T200" priority="300">
+              Timeout-Zeit in Minuten (1–120)
+            </Text>
+            <Box gap="100" alignItems="Center" style={{ marginTop: config.space.S100 }}>
+              <Input
+                id="kiconnect-idle-timeout"
+                name="kiconnect-idle-timeout"
+                type="number"
+                min={1}
+                max={120}
+                step={1}
+                inputMode="numeric"
+                value={idleTimeoutInput}
+                onChange={(event) => {
+                  setIdleTimeoutInput(event.currentTarget.value);
+                  setIdleTimeoutMessage(undefined);
+                }}
+                disabled={savingIdleTimeout}
+                style={{ minWidth: 0, fontSize: toRem(13), color: '#527079' }}
+              />
+              <Button type="submit" size="300" variant="Secondary" disabled={savingIdleTimeout}>
+                <Text as="span" size="T200">
+                  {savingIdleTimeout ? '…' : 'Speichern'}
+                </Text>
+              </Button>
+            </Box>
+            {idleTimeoutMessage && (
+              <Text size="T200" priority="300" style={{ marginTop: config.space.S100 }}>
+                {idleTimeoutMessage}
+              </Text>
+            )}
+          </form>
+          {accountType === 'team' &&
+            (idleMonitor.status === 'unsupported' ||
+              idleMonitor.status === 'denied' ||
+              idleMonitor.status === 'error') && (
+              <Text
+                size="T200"
+                priority="300"
+                style={{ padding: `0 ${config.space.S100}`, color: '#922536' }}
+              >
+                Automatischer Logout kann in diesem Browser nicht aktiviert werden.
+              </Text>
+            )}
           {canLock && (
             <MenuItem onClick={handleLock} size="300" radii="300">
               <Text style={{ flexGrow: 1, fontWeight: 700 }} as="span" size="T300" truncate>
