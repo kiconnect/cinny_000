@@ -26,7 +26,7 @@ import {
   readIdleTimeoutMinutes,
   writeIdleTimeoutMinutes,
 } from '../logic/idlePreference';
-import { beginPasskeyUnlock } from './oidc';
+import { beginPasskeyUnlock, preparePasskeyUnlock } from './oidc';
 import {
   clearUnlockTransaction,
   LockRecord,
@@ -118,6 +118,10 @@ export function KiconnectLockProvider({ children, mx }: Props): JSX.Element {
   const lastWriteRef = useRef(initialRecord.lastActivity);
   const channelRef = useRef<BroadcastChannel>();
   const logoutInProgressRef = useRef(false);
+
+  useEffect(() => {
+    if (!isTeam && locked) preparePasskeyUnlock(config);
+  }, [config, isTeam, locked]);
 
   const applyIdleTimeout = useCallback(
     (minutes: number) => {

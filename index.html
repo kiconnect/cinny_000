@@ -11,10 +11,7 @@
       name="description"
       content="KIconnect Chat ist ein Matrix-basierter Kommunikationsclient auf Basis von Cinny."
     />
-    <meta
-      name="keywords"
-      content="kiconnect, matrix, matrix client, cinny"
-    />
+    <meta name="keywords" content="kiconnect, matrix, matrix client, cinny" />
 
     <meta property="og:title" content="KIconnect Chat" />
     <meta property="og:url" content="https://cinny.kiconnect.at" />
@@ -146,6 +143,77 @@
           return base64Url(bytes);
         };
 
+        const createEarlyUnlockPreparation = async () => {
+          const response = await fetch('/config.json', { cache: 'no-store' });
+          if (!response.ok) throw new Error('Konfiguration konnte nicht geladen werden.');
+          const config = await response.json();
+          const unlock = config.keycloakUnlock;
+          if (!unlock?.issuer || !unlock.clientId) {
+            throw new Error('Passkey-Entsperrung ist nicht konfiguriert.');
+          }
+          const issuer = unlock.issuer.replace(/\/$/, '');
+          const origin = new URL(issuer).origin;
+          if (!document.querySelector(`link[data-kiconnect-preconnect="${origin}"]`)) {
+            const preconnect = document.createElement('link');
+            preconnect.rel = 'preconnect';
+            preconnect.href = origin;
+            preconnect.crossOrigin = 'anonymous';
+            preconnect.dataset.kiconnectPreconnect = origin;
+            document.head.append(preconnect);
+          }
+          const codeVerifier = random(64);
+          const digest = await crypto.subtle.digest(
+            'SHA-256',
+            new TextEncoder().encode(codeVerifier)
+          );
+          return {
+            unlock,
+            issuer,
+            codeVerifier,
+            codeChallenge: base64Url(new Uint8Array(digest)),
+            state: random(),
+            nonce: random(),
+          };
+        };
+        let earlyUnlockPreparation = createEarlyUnlockPreparation();
+        let earlyUnlockPreparedValue;
+        earlyUnlockPreparation.then((value) => {
+          earlyUnlockPreparedValue = value;
+        });
+        void earlyUnlockPreparation.catch(() => undefined);
+
+        const createEarlyAuthorizeUrl = (prepared) => {
+          const { unlock, issuer, codeChallenge, state, nonce } = prepared;
+          const redirectUri = unlock.redirectUri || `${location.origin}/unlock/callback`;
+          const authorizeUrl = new URL(`${issuer}/protocol/openid-connect/auth`);
+          authorizeUrl.searchParams.set('client_id', unlock.clientId);
+          authorizeUrl.searchParams.set('redirect_uri', redirectUri);
+          authorizeUrl.searchParams.set('response_type', 'code');
+          authorizeUrl.searchParams.set('scope', 'openid');
+          authorizeUrl.searchParams.set('code_challenge_method', 'S256');
+          authorizeUrl.searchParams.set('code_challenge', codeChallenge);
+          authorizeUrl.searchParams.set('state', state);
+          authorizeUrl.searchParams.set('nonce', nonce);
+          authorizeUrl.searchParams.set('max_age', '0');
+          authorizeUrl.searchParams.set('prompt', 'login');
+          return { authorizeUrl, redirectUri };
+        };
+
+        const saveEarlyUnlockTransaction = (prepared, redirectUri, popup) => {
+          localStorage.setItem(
+            'kiconnect.unlock.transaction.v1',
+            JSON.stringify({
+              state: prepared.state,
+              nonce: prepared.nonce,
+              codeVerifier: prepared.codeVerifier,
+              redirectUri,
+              returnUrl: `${location.pathname}${location.search}${location.hash}`,
+              createdAt: Date.now(),
+              popup,
+            })
+          );
+        };
+
         button.addEventListener('click', async () => {
           button.disabled = true;
           button.textContent = 'Sichere Anmeldung wird geöffnet …';
@@ -154,11 +222,30 @@
           if (heading) heading.textContent = 'Sichere Anmeldung wird geprüft …';
           if (description) description.textContent = 'Anschließend wird KI connect geladen.';
           error.textContent = '';
-          const popup = window.open(
-            '',
-            `kiconnect-passkey-unlock-${Date.now()}`,
-            'popup=yes,width=520,height=720,resizable=yes,scrollbars=yes'
-          );
+          const popupName = `kiconnect-passkey-unlock-${Date.now()}`;
+          const popupFeatures = 'popup=yes,width=520,height=720,resizable=yes,scrollbars=yes';
+          let popup;
+          if (earlyUnlockPreparedValue) {
+            const prepared = earlyUnlockPreparedValue;
+            earlyUnlockPreparedValue = undefined;
+            earlyUnlockPreparation = createEarlyUnlockPreparation();
+            earlyUnlockPreparation.then((value) => {
+              earlyUnlockPreparedValue = value;
+            });
+            void earlyUnlockPreparation.catch(() => undefined);
+            const { authorizeUrl, redirectUri } = createEarlyAuthorizeUrl(prepared);
+            saveEarlyUnlockTransaction(prepared, redirectUri, true);
+            popup = window.open(authorizeUrl.toString(), popupName, popupFeatures);
+            if (popup) {
+              popup.focus();
+              return;
+            }
+            saveEarlyUnlockTransaction(prepared, redirectUri, false);
+            location.assign(authorizeUrl.toString());
+            return;
+          }
+
+          popup = window.open('', popupName, popupFeatures);
           if (popup) {
             popup.document.head.innerHTML =
               '<meta name="viewport" content="width=device-width,initial-scale=1">' +
@@ -170,48 +257,19 @@
               '<p style="margin:0;color:#527079;font-size:24px;line-height:1.5">Sie werden zur sicheren Anmeldung weitergeleitet …</p></main>';
           }
           try {
-            const response = await fetch('/config.json', { cache: 'no-store' });
-            if (!response.ok) throw new Error('Konfiguration konnte nicht geladen werden.');
-            const config = await response.json();
-            const unlock = config.keycloakUnlock;
-            if (!unlock?.issuer || !unlock.clientId) {
-              throw new Error('Passkey-Entsperrung ist nicht konfiguriert.');
-            }
-            const codeVerifier = random(64);
-            const digest = await crypto.subtle.digest(
-              'SHA-256',
-              new TextEncoder().encode(codeVerifier)
-            );
-            const state = random();
-            const nonce = random();
-            const redirectUri = unlock.redirectUri || `${location.origin}/unlock/callback`;
-            localStorage.setItem(
-              'kiconnect.unlock.transaction.v1',
-              JSON.stringify({
-                state,
-                nonce,
-                codeVerifier,
-                redirectUri,
-                returnUrl: `${location.pathname}${location.search}${location.hash}`,
-                createdAt: Date.now(),
-                popup: Boolean(popup),
-              })
-            );
-            const issuer = unlock.issuer.replace(/\/$/, '');
-            const authorizeUrl = new URL(`${issuer}/protocol/openid-connect/auth`);
-            authorizeUrl.searchParams.set('client_id', unlock.clientId);
-            authorizeUrl.searchParams.set('redirect_uri', redirectUri);
-            authorizeUrl.searchParams.set('response_type', 'code');
-            authorizeUrl.searchParams.set('scope', 'openid');
-            authorizeUrl.searchParams.set('code_challenge_method', 'S256');
-            authorizeUrl.searchParams.set('code_challenge', base64Url(new Uint8Array(digest)));
-            authorizeUrl.searchParams.set('state', state);
-            authorizeUrl.searchParams.set('nonce', nonce);
-            authorizeUrl.searchParams.set('max_age', '0');
-            authorizeUrl.searchParams.set('prompt', 'login');
+            const prepared = await earlyUnlockPreparation;
+            earlyUnlockPreparation = createEarlyUnlockPreparation();
+            earlyUnlockPreparation.then((value) => {
+              earlyUnlockPreparedValue = value;
+            });
+            void earlyUnlockPreparation.catch(() => undefined);
+            const { authorizeUrl, redirectUri } = createEarlyAuthorizeUrl(prepared);
+            saveEarlyUnlockTransaction(prepared, redirectUri, Boolean(popup));
             if (popup) popup.location.replace(authorizeUrl.toString());
             else location.assign(authorizeUrl.toString());
           } catch (reason) {
+            earlyUnlockPreparation = createEarlyUnlockPreparation();
+            void earlyUnlockPreparation.catch(() => undefined);
             popup?.close();
             button.disabled = false;
             button.textContent = 'Client entsperren';

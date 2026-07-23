@@ -100,6 +100,7 @@ export function UnlockCallback({ config }: Props): JSX.Element {
           },
           window.location.origin
         );
+        window.opener?.focus();
         setComplete(true);
         window.setTimeout(() => window.close(), 150);
         return;
