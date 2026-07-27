@@ -32,7 +32,7 @@ export function WelcomePage() {
                   target="_blank"
                   rel="noreferrer noopener"
                 >
-                  Cinny v4.12.1
+                  Cinny v4.12.3
                 </a>
               </span>
             }

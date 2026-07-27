@@ -46,7 +46,7 @@ export function About({ requestClose }: AboutProps) {
                   <Box direction="Column" gap="100">
                     <Box gap="100" alignItems="End">
                       <Text size="H3">KIconnect Chat</Text>
-                      <Text size="T200">powered by Cinny v4.12.1</Text>
+                      <Text size="T200">powered by Cinny v4.12.3</Text>
                     </Box>
                     <Text>
                       KIconnect Chat ist ein angepasster Matrix-Client auf Basis von Cinny.

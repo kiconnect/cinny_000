@@ -1,7 +1,6 @@
 /* eslint-disable jsx-a11y/media-has-caption */
 import React, { ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { useAtomValue, useSetAtom } from 'jotai';
-import { MatrixRTCSession } from 'matrix-js-sdk/lib/matrixrtc/MatrixRTCSession';
 import FocusTrap from 'focus-trap-react';
 import {
   Avatar,
@@ -93,12 +92,14 @@ function IncomingCall({ dm, info, onIgnore, onAnswer, onReject }: IncomingCallPr
   const session = useCallSession(room);
   useCallMembersChange(
     session,
-    useCallback(() => {
-      const members = MatrixRTCSession.sessionMembershipsForRoom(room, session.sessionDescription);
-      if (members.length === 0) {
-        onIgnore();
-      }
-    }, [room, session, onIgnore])
+    useCallback(
+      (members) => {
+        if (members.length === 0) {
+          onIgnore();
+        }
+      },
+      [onIgnore]
+    )
   );
 
   const playSound = useCallback(() => {
@@ -147,11 +148,13 @@ function IncomingCall({ dm, info, onIgnore, onAnswer, onReject }: IncomingCallPr
                       />
                     </Avatar>
                   </Box>
-                  <Box grow="Yes" direction="Column" gap="100">
+                  <Box grow="Yes" direction="Column" gap="100" alignItems="Center">
                     <Text size="H3" align="Center" truncate>
                       {roomName}
                     </Text>
-                    <Text size="T300">Incoming Call</Text>
+                    <Text size="T300" align="Center">
+                      Incoming Call
+                    </Text>
                   </Box>
                 </Box>
                 {!livekitSupported && (
@@ -236,6 +239,7 @@ function IncomingCallListener({ callEmbed, joined }: IncomingCallListenerProps) 
       // only process rtc notification reference events.
       // we do not want to wait to decrypt all events.
       if (event.getRelation()?.rel_type !== RelationType.Reference) return;
+      if (room?.isCallRoom()) return;
 
       if (event.isEncrypted()) {
         if (!event.isBeingDecrypted()) {
@@ -264,7 +268,8 @@ function IncomingCallListener({ callEmbed, joined }: IncomingCallListenerProps) 
       const refEventId = relation?.event_id;
 
       const mention =
-        content['m.mentions'].room || content['m.mentions'].user_ids?.includes(mx.getSafeUserId());
+        content['m.mentions']?.room ||
+        content['m.mentions']?.user_ids?.includes(mx.getSafeUserId());
       if (!sender || !refEventId || !mention || Date.now() >= senderTs + lifetime) {
         return;
       }
