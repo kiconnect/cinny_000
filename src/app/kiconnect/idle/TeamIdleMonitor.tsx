@@ -28,6 +28,7 @@ type IdleDetectorConstructor = {
 
 export type TeamIdleStatus =
   | 'not-team'
+  | 'disabled'
   | 'unsupported'
   | 'permission-required'
   | 'denied'
@@ -154,6 +155,13 @@ export function TeamIdleMonitorProvider({ children }: { children: ReactNode }): 
       return undefined;
     }
 
+    if (idleTimeoutMinutes === 0) {
+      logoutStartedRef.current = false;
+      stop();
+      updateStatus('disabled');
+      return undefined;
+    }
+
     const IdleDetector = getIdleDetector();
     if (!IdleDetector) {
       updateStatus('unsupported');
@@ -170,7 +178,7 @@ export function TeamIdleMonitorProvider({ children }: { children: ReactNode }): 
       .catch(() => updateStatus('permission-required'));
 
     return stop;
-  }, [accountType, start, stop, updateStatus]);
+  }, [accountType, idleTimeoutMinutes, start, stop, updateStatus]);
 
   const value = useMemo(
     () => ({ status, changedAt, requestPermission }),

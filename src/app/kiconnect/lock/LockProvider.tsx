@@ -99,13 +99,13 @@ export function KiconnectLockProvider({ children, mx }: Props): JSX.Element {
       writeLockRecord(userId, unlockedRecord);
       return unlockedRecord;
     }
-    if (!record.locked && Date.now() - record.lastActivity >= timeoutMs) {
+    if (!record.locked && idleTimeoutMinutes > 0 && Date.now() - record.lastActivity >= timeoutMs) {
       const expiredRecord = { ...record, locked: true };
       writeLockRecord(userId, expiredRecord);
       return expiredRecord;
     }
     return record;
-  }, [timeoutMs, userId]);
+  }, [idleTimeoutMinutes, timeoutMs, userId]);
   const [locked, setLocked] = useState(initialRecord.locked);
   const [privacyShield, setPrivacyShield] = useState(false);
   const [unlocking, setUnlocking] = useState(() => {
@@ -177,7 +177,7 @@ export function KiconnectLockProvider({ children, mx }: Props): JSX.Element {
     async (minutes: number) => {
       const validMinutes = parseIdleTimeoutMinutes(minutes);
       if (validMinutes === undefined) {
-        throw new Error('Bitte eine ganze Zahl zwischen 1 und 120 eingeben.');
+        throw new Error('Bitte eine ganze Zahl zwischen 0 und 120 eingeben.');
       }
       if (!mx) throw new Error('Die Einstellung kann derzeit nicht gespeichert werden.');
       const existing =
@@ -229,12 +229,15 @@ export function KiconnectLockProvider({ children, mx }: Props): JSX.Element {
       return false;
     }
     const record = recordRef.current;
-    if (record.locked || Date.now() - record.lastActivity >= timeoutMs) {
+    if (
+      record.locked ||
+      (idleTimeoutMinutes > 0 && Date.now() - record.lastActivity >= timeoutMs)
+    ) {
       lock();
       return true;
     }
     return false;
-  }, [isTeam, lock, timeoutMs]);
+  }, [idleTimeoutMinutes, isTeam, lock, timeoutMs]);
 
   useEffect(() => {
     if (typeof BroadcastChannel === 'function') {

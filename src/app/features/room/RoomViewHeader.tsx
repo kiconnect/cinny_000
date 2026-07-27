@@ -133,8 +133,8 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(
       event.preventDefault();
       if (savingIdleTimeout) return;
       const minutes = Number(idleTimeoutInput);
-      if (!Number.isInteger(minutes) || minutes < 1 || minutes > 120) {
-        setIdleTimeoutMessage('Bitte eine ganze Zahl von 1 bis 120 eingeben.');
+      if (!Number.isInteger(minutes) || minutes < 0 || minutes > 120) {
+        setIdleTimeoutMessage('Bitte eine ganze Zahl von 0 bis 120 eingeben.');
         return;
       }
       setSavingIdleTimeout(true);
@@ -142,6 +142,7 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(
       try {
         if (
           accountType === 'team' &&
+          minutes > 0 &&
           (idleMonitor.status === 'permission-required' || idleMonitor.status === 'denied')
         ) {
           await idleMonitor.requestPermission();
@@ -230,14 +231,14 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(
         <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
           <form onSubmit={handleIdleTimeoutSubmit} style={{ padding: config.space.S100 }}>
             <Text as="label" htmlFor="kiconnect-idle-timeout" size="T200" priority="300">
-              Timeout-Zeit in Minuten (1–120)
+              Timeout-Zeit in Minuten (0–120, 0 = aus)
             </Text>
             <Box gap="100" alignItems="Center" style={{ marginTop: config.space.S100 }}>
               <Input
                 id="kiconnect-idle-timeout"
                 name="kiconnect-idle-timeout"
                 type="number"
-                min={1}
+                min={0}
                 max={120}
                 step={1}
                 inputMode="numeric"
@@ -262,6 +263,7 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(
             )}
           </form>
           {accountType === 'team' &&
+            idleTimeoutMinutes > 0 &&
             (idleMonitor.status === 'unsupported' ||
               idleMonitor.status === 'denied' ||
               idleMonitor.status === 'error') && (
