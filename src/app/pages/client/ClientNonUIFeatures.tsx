@@ -27,7 +27,7 @@ import { useKiconnectLock } from '../../kiconnect/lock/LockProvider';
 import { TeamIdleMonitorProvider } from '../../kiconnect/idle/TeamIdleMonitor';
 
 const KIconnectLogo = '/kiconnect-app-icon-v5.png';
-const KIconnectFavicon = '/kiconnect-favicon-v6-48.png';
+const KIconnectFavicon = '/kiconnect-desktop-v2-48.png';
 
 function SystemEmojiFeature() {
   const [twitterEmoji] = useSetting(settingsAtom, 'twitterEmoji');
