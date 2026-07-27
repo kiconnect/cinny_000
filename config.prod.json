@@ -4,6 +4,7 @@
   "allowCustomHomeservers": false,
   "disableSSO": true,
   "hidePasswordLogin": true,
+  "portalUrl": "https://portal.kiconnect.at",
   "keycloakLogout": {
     "issuer": "https://sso.id-am.at/realms/KIconnect",
     "clientId": "kiconnect-matrix"
@@ -14,7 +15,8 @@
     "redirectUri": "https://cinny.kiconnect.at/unlock/callback"
   },
   "kiconnectLock": {
-    "timeoutMinutes": 5
+    "timeoutMinutes": 5,
+    "preferencesUrl": "https://portal.kiconnect.at/api/user/preferences/idle-timeout"
   },
 
   "appearance": {

@@ -10,6 +10,7 @@ export type ClientConfig = {
   homeserverList?: string[];
   allowCustomHomeservers?: boolean;
   hidePasswordLogin?: boolean;
+  portalUrl?: string;
   keycloakLogout?: {
     issuer?: string;
     clientId?: string;
@@ -22,6 +23,7 @@ export type ClientConfig = {
   };
   kiconnectLock?: {
     timeoutMinutes?: number;
+    preferencesUrl?: string;
   };
   webPush?: {
     gatewayUrl?: string;

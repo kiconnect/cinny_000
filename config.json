@@ -4,6 +4,7 @@
   "allowCustomHomeservers": true,
   "disableSSO": true,
   "hidePasswordLogin": true,
+  "portalUrl": "https://devportal.kiconnect.at",
   "keycloakLogout": {
     "issuer": "https://devsso.id-am.at/realms/KIconnect",
     "clientId": "kiconnect-matrix"
@@ -14,7 +15,8 @@
     "redirectUri": "https://devcinny.kiconnect.at/unlock/callback"
   },
   "kiconnectLock": {
-    "timeoutMinutes": 5
+    "timeoutMinutes": 5,
+    "preferencesUrl": "https://devportal.kiconnect.at/api/user/preferences/idle-timeout"
   },
   "webPush": {
     "gatewayUrl": "https://devpush.kiconnect.at",

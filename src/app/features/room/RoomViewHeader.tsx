@@ -429,6 +429,8 @@ export function RoomViewHeader({ callView }: { callView?: boolean }) {
   const powerLevels = usePowerLevelsContext();
   const creators = useRoomCreators(room);
   const permissions = useRoomPermissions(creators, powerLevels);
+  const clientConfig = useClientConfig();
+  const { accountType } = useKiconnectLock();
 
   const hasCallPermission = permissions.stateEvent(
     StateEvent.GroupCallMemberPrefix,
@@ -472,6 +474,32 @@ export function RoomViewHeader({ callView }: { callView?: boolean }) {
 
   const handleOpenPinMenu: MouseEventHandler<HTMLButtonElement> = (evt) => {
     setPinMenuAnchor(evt.currentTarget.getBoundingClientRect());
+  };
+
+  const handleOpenPortal = async () => {
+    if (!clientConfig.portalUrl) return;
+    const portalWindow = window.open('', 'kiconnect-portal');
+    if (!portalWindow) {
+      window.alert('Bitte erlauben Sie Pop-up-Fenster für KI connect.');
+      return;
+    }
+    portalWindow.document.body.textContent = 'Das sichere Portal wird geöffnet …';
+    try {
+      const response = await fetch(
+        `${clientConfig.portalUrl.replace(/\/$/, '')}/api/portal-launch`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${mx.getAccessToken() ?? ''}` },
+        }
+      );
+      if (!response.ok) throw new Error('Portalzugang wurde abgelehnt.');
+      const result = await response.json();
+      if (typeof result?.launch_url !== 'string') throw new Error('Portalantwort ist ungültig.');
+      portalWindow.location.replace(result.launch_url);
+    } catch (error) {
+      portalWindow.close();
+      window.alert(error instanceof Error ? error.message : 'Portal konnte nicht geöffnet werden.');
+    }
   };
 
   const handleAddAuth = async (method: 'passkey' | 'password_2fa') => {
@@ -692,6 +720,19 @@ export function RoomViewHeader({ callView }: { callView?: boolean }) {
             />
             {!room.isCallRoom() && livekitSupported && rtcSupported && hasCallPermission && (
               <CallButton />
+            )}
+            {accountType === 'team' && clientConfig.portalUrl && (
+              <Button
+                size="300"
+                variant="Secondary"
+                onClick={handleOpenPortal}
+                aria-label="KIconnect Portal öffnen"
+                style={{ marginInline: toRem(4), fontWeight: 700 }}
+              >
+                <Text as="span" size="T200">
+                  PORTAL
+                </Text>
+              </Button>
             )}
             <TooltipProvider
               position="Bottom"

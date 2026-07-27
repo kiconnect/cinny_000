@@ -138,6 +138,42 @@ export function KiconnectLockProvider({ children, mx }: Props): JSX.Element {
     if (minutes !== undefined) applyIdleTimeout(minutes);
   }, [applyIdleTimeout, mx]);
 
+  const syncCentralIdleTimeout = useCallback(async () => {
+    const preferencesUrl = config.kiconnectLock?.preferencesUrl;
+    const accessToken = mx?.getAccessToken();
+    if (!preferencesUrl || !accessToken || !mx) return;
+    try {
+      const response = await fetch(preferencesUrl, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!response.ok) return;
+      const content = await response.json();
+      const minutes = parseIdleTimeoutMinutes(content?.idle_timeout_minutes);
+      if (minutes === undefined) return;
+      if (content?.configured === false) {
+        const matrixContent = mx
+          .getAccountData(KICONNECT_PREFERENCES_EVENT_TYPE as any)
+          ?.getContent();
+        const existing = parseIdleTimeoutMinutes(matrixContent?.idle_timeout_minutes);
+        if (existing !== undefined) {
+          await fetch(preferencesUrl, {
+            method: 'PUT',
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ idle_timeout_minutes: existing }),
+          });
+          applyIdleTimeout(existing);
+          return;
+        }
+      }
+      applyIdleTimeout(minutes);
+    } catch {
+      // Matrix account data remains the compatibility fallback.
+    }
+  }, [applyIdleTimeout, config.kiconnectLock?.preferencesUrl, mx]);
+
   useSyncState(
     mx,
     useCallback(
@@ -147,8 +183,9 @@ export function KiconnectLockProvider({ children, mx }: Props): JSX.Element {
         writeAccountType(userId, detected);
         setAccountType(detected);
         readServerIdleTimeout();
+        void syncCentralIdleTimeout();
       },
-      [mx, readServerIdleTimeout, userId]
+      [mx, readServerIdleTimeout, syncCentralIdleTimeout, userId]
     )
   );
 
@@ -182,6 +219,21 @@ export function KiconnectLockProvider({ children, mx }: Props): JSX.Element {
       if (!mx) throw new Error('Die Einstellung kann derzeit nicht gespeichert werden.');
       const existing =
         mx.getAccountData(KICONNECT_PREFERENCES_EVENT_TYPE as any)?.getContent() ?? {};
+      const preferencesUrl = config.kiconnectLock?.preferencesUrl;
+      const accessToken = mx.getAccessToken();
+      if (preferencesUrl && accessToken) {
+        const response = await fetch(preferencesUrl, {
+          method: 'PUT',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ idle_timeout_minutes: validMinutes }),
+        });
+        if (!response.ok) {
+          throw new Error('Die Einstellung konnte zentral nicht gespeichert werden.');
+        }
+      }
       await mx.setAccountData(
         KICONNECT_PREFERENCES_EVENT_TYPE as any,
         {
@@ -191,7 +243,7 @@ export function KiconnectLockProvider({ children, mx }: Props): JSX.Element {
       );
       applyIdleTimeout(validMinutes);
     },
-    [applyIdleTimeout, mx]
+    [applyIdleTimeout, config.kiconnectLock?.preferencesUrl, mx]
   );
 
   useEffect(() => {
