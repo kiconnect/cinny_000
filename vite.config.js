@@ -47,6 +47,10 @@ const copyFiles = {
       dest: '',
     },
     {
+      src: 'public/kiconnect-apple-touch-v6-180.png',
+      dest: '',
+    },
+    {
       src: 'public/kiconnect-favicon-v6*',
       dest: '',
     },
