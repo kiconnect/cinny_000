@@ -726,11 +726,18 @@ export function RoomViewHeader({ callView }: { callView?: boolean }) {
                 size="300"
                 variant="Secondary"
                 onClick={handleOpenPortal}
-                aria-label="KIconnect Portal öffnen"
-                style={{ marginInline: toRem(4), fontWeight: 700 }}
+                aria-label="Patientenverwaltung öffnen"
+                style={{
+                  marginInline: toRem(4),
+                  border: '1px solid #c7cdd1',
+                  background: '#eef1f2',
+                  color: '#111111',
+                  fontWeight: 700,
+                  whiteSpace: 'nowrap',
+                }}
               >
-                <Text as="span" size="T200">
-                  PORTAL
+                <Text as="span" size="T200" style={{ color: '#111111' }}>
+                  Patientenverwaltung
                 </Text>
               </Button>
             )}
