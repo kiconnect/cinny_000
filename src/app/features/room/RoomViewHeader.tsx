@@ -64,7 +64,7 @@ import {
   getWebPushStatus,
   WebPushStatus,
 } from '../../kiconnect/push/webPush';
-import { getRoomOwner } from '../../kiconnect/logic/roomState';
+import { getRoomOwner, isPatientRoom } from '../../kiconnect/logic/roomState';
 import { useTeamIdleMonitor } from '../../kiconnect/idle/TeamIdleMonitor';
 
 type RoomMenuProps = {
@@ -72,9 +72,11 @@ type RoomMenuProps = {
   requestClose: () => void;
   canAddAuth: boolean;
   requestAuthAdd: () => void;
+  canManageConsent: boolean;
+  requestConsent: () => void;
 };
 const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(
-  ({ room, requestClose, canAddAuth, requestAuthAdd }, ref) => {
+  ({ room, requestClose, canAddAuth, requestAuthAdd, canManageConsent, requestConsent }, ref) => {
     const mx = useMatrixClient();
     const clientConfig = useClientConfig();
     const { accountType, canLock, idleTimeoutMinutes, setIdleTimeoutMinutes, lock } =
@@ -223,6 +225,20 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(
             >
               <Text style={{ flexGrow: 1, fontWeight: 700 }} as="span" size="T300" truncate>
                 Anmeldeart hinzufügen
+              </Text>
+            </MenuItem>
+          )}
+          {canManageConsent && (
+            <MenuItem
+              onClick={() => {
+                requestClose();
+                requestConsent();
+              }}
+              size="300"
+              radii="300"
+            >
+              <Text style={{ flexGrow: 1 }} as="span" size="T300">
+                Datenschutz &amp; Einwilligung
               </Text>
             </MenuItem>
           )}
@@ -442,10 +458,31 @@ export function RoomViewHeader({ callView }: { callView?: boolean }) {
   const [menuAnchor, setMenuAnchor] = useState<RectCords>();
   const [pinMenuAnchor, setPinMenuAnchor] = useState<RectCords>();
   const [showAuthAdd, setShowAuthAdd] = useState(false);
+  const [showConsent, setShowConsent] = useState(false);
+  const [confirmWithdraw, setConfirmWithdraw] = useState(false);
+  const [withdrawingConsent, setWithdrawingConsent] = useState(false);
+  const [reopeningConsent, setReopeningConsent] = useState(false);
+  const [consentError, setConsentError] = useState<string>();
   const [sendingAuthAdd, setSendingAuthAdd] = useState(false);
   const [authAddError, setAuthAddError] = useState<string>();
   const direct = useIsDirectRoom();
   const canAddAuth = getRoomOwner(room) === mx.getUserId();
+  const canManageConsent = isPatientRoom(room) && getRoomOwner(room) === mx.getUserId();
+  const consentEvent = useStateEvent(
+    room,
+    'io.kiconnect.consent.current' as StateEvent
+  );
+  const consent = consentEvent?.getContent() as
+    | {
+        version?: string;
+        document?: string;
+        pdf_mxc?: string;
+        status?: string;
+        decided_at?: string;
+        matrix_user_id?: string;
+      }
+    | undefined;
+  const ownConsent = consent?.matrix_user_id === mx.getUserId() ? consent : undefined;
 
   const pinnedEvents = useRoomPinnedEvents(room);
   const encryptionEvent = useStateEvent(room, StateEvent.RoomEncryption);
@@ -523,6 +560,61 @@ export function RoomViewHeader({ callView }: { callView?: boolean }) {
     }
   };
 
+  const handleWithdrawConsent = async () => {
+    if (withdrawingConsent) return;
+    setWithdrawingConsent(true);
+    setConsentError(undefined);
+    try {
+      await mx.sendEvent(room.roomId, 'io.kiconnect.consent.withdraw', {
+        requested_by: mx.getUserId(),
+        requested_at: Date.now(),
+        version: ownConsent?.version,
+      });
+      setConfirmWithdraw(false);
+      setShowConsent(false);
+    } catch (error) {
+      setConsentError(
+        error instanceof Error ? error.message : 'Der Widerruf konnte nicht übermittelt werden.'
+      );
+    } finally {
+      setWithdrawingConsent(false);
+    }
+  };
+
+  const handleReopenConsent = async () => {
+    if (reopeningConsent) return;
+    setReopeningConsent(true);
+    setConsentError(undefined);
+    try {
+      await mx.sendEvent(room.roomId, 'io.kiconnect.consent.reopen', {
+        requested_by: mx.getUserId(),
+        requested_at: Date.now(),
+        previous_status: ownConsent?.status,
+      });
+      setShowConsent(false);
+    } catch (error) {
+      setConsentError(
+        error instanceof Error
+          ? error.message
+          : 'Die erneute Einwilligung konnte nicht gestartet werden.'
+      );
+    } finally {
+      setReopeningConsent(false);
+    }
+  };
+
+  const consentStatus =
+    ownConsent?.status === 'accepted'
+      ? 'Zugestimmt'
+      : ownConsent?.status === 'withdrawn'
+        ? 'Widerrufen'
+        : ownConsent?.status === 'declined'
+          ? 'Nicht zugestimmt'
+          : 'Zustimmung ausständig';
+  const consentPdfUrl = ownConsent?.pdf_mxc
+    ? mx.mxcUrlToHttp(ownConsent.pdf_mxc, undefined, undefined, undefined, undefined, undefined, true)
+    : undefined;
+
   return (
     <>
       {showAuthAdd && (
@@ -564,6 +656,116 @@ export function RoomViewHeader({ callView }: { callView?: boolean }) {
                     disabled={sendingAuthAdd}
                   >
                     Abbrechen
+                  </Button>
+                </Box>
+              </Box>
+            </Dialog>
+          </OverlayCenter>
+        </Overlay>
+      )}
+      {showConsent && (
+        <Overlay open backdrop={<OverlayBackdrop />}>
+          <OverlayCenter>
+            <Dialog
+              variant="Surface"
+              style={{
+                width: 'min(760px, calc(100vw - 24px))',
+                height: 'min(760px, calc(100dvh - 24px))',
+                maxHeight: 'calc(100dvh - 24px)',
+                overflow: 'hidden',
+              }}
+            >
+              <Box
+                direction="Column"
+                gap="300"
+                style={{ padding: 20, height: '100%', minHeight: 0, boxSizing: 'border-box' }}
+              >
+                <Box alignItems="Center" justifyContent="SpaceBetween" gap="200" shrink="No">
+                  <Text size="H4">Datenschutz &amp; Einwilligung</Text>
+                  <Button variant="Secondary" size="300" onClick={() => setShowConsent(false)}>
+                    Schließen
+                  </Button>
+                </Box>
+                <Text priority="400">
+                  Status: <strong>{consentStatus}</strong>
+                  {ownConsent?.version ? ` · Version ${ownConsent.version}` : ''}
+                </Text>
+                {ownConsent?.decided_at && (
+                  <Text size="T200" priority="400">
+                    Letzte Entscheidung: {new Date(ownConsent.decided_at).toLocaleString('de-AT')}
+                  </Text>
+                )}
+                <div
+                  style={{
+                    flex: '1 1 auto',
+                    minHeight: 0,
+                    whiteSpace: 'pre-wrap',
+                    overflow: 'auto',
+                    border: '1px solid #b8c7cb',
+                    borderRadius: 12,
+                    padding: 16,
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {ownConsent?.document ??
+                    'Die Einverständniserklärung ist in diesem Raum noch nicht verfügbar.'}
+                </div>
+                {consentError && <Text style={{ color: '#922536' }}>{consentError}</Text>}
+                <Box
+                  gap="200"
+                  justifyContent="End"
+                  shrink="No"
+                  style={{ flexWrap: 'wrap' }}
+                >
+                  {consentPdfUrl && (
+                    <Button
+                      as="a"
+                      variant="Secondary"
+                      href={consentPdfUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      PDF anzeigen
+                    </Button>
+                  )}
+                  {ownConsent?.status === 'accepted' && (
+                    <Button variant="Secondary" onClick={() => setConfirmWithdraw(true)}>
+                      Einwilligung widerrufen
+                    </Button>
+                  )}
+                  {(ownConsent?.status === 'withdrawn' || ownConsent?.status === 'declined') && (
+                    <Button onClick={handleReopenConsent} disabled={reopeningConsent}>
+                      {reopeningConsent ? 'Wird vorbereitet …' : 'Einwilligung erneut erteilen'}
+                    </Button>
+                  )}
+                </Box>
+              </Box>
+            </Dialog>
+          </OverlayCenter>
+        </Overlay>
+      )}
+      {confirmWithdraw && (
+        <Overlay open backdrop={<OverlayBackdrop />}>
+          <OverlayCenter>
+            <Dialog variant="Surface" style={{ width: 'min(480px, calc(100vw - 32px))' }}>
+              <Box direction="Column" gap="300" style={{ padding: 24 }}>
+                <Text size="H4">Einwilligung widerrufen?</Text>
+                <Text priority="400">
+                  Der Chat wird unmittelbar gesperrt. Der Widerruf wirkt für die Zukunft;
+                  gesetzlich erforderliche Dokumentation bleibt erhalten. Für weitere Anliegen
+                  kontaktieren Sie bitte Ihre Ordination telefonisch oder persönlich.
+                </Text>
+                {consentError && <Text style={{ color: '#922536' }}>{consentError}</Text>}
+                <Box gap="200" justifyContent="End">
+                  <Button
+                    variant="Secondary"
+                    onClick={() => setConfirmWithdraw(false)}
+                    disabled={withdrawingConsent}
+                  >
+                    Abbrechen
+                  </Button>
+                  <Button onClick={handleWithdrawConsent} disabled={withdrawingConsent}>
+                    {withdrawingConsent ? 'Wird übermittelt …' : 'Jetzt widerrufen'}
                   </Button>
                 </Box>
               </Box>
@@ -726,7 +928,7 @@ export function RoomViewHeader({ callView }: { callView?: boolean }) {
                 size="300"
                 variant="Secondary"
                 onClick={handleOpenPortal}
-                aria-label="Patientenverwaltung öffnen"
+                aria-label="Benutzerverwaltung öffnen"
                 style={{
                   marginInline: toRem(4),
                   border: '1px solid #c7cdd1',
@@ -737,7 +939,7 @@ export function RoomViewHeader({ callView }: { callView?: boolean }) {
                 }}
               >
                 <Text as="span" size="T200" style={{ color: '#111111' }}>
-                  Patientenverwaltung
+                  Benutzerverwaltung
                 </Text>
               </Button>
             )}
@@ -783,6 +985,8 @@ export function RoomViewHeader({ callView }: { callView?: boolean }) {
                     requestClose={() => setMenuAnchor(undefined)}
                     canAddAuth={canAddAuth}
                     requestAuthAdd={() => setShowAuthAdd(true)}
+                    canManageConsent={canManageConsent}
+                    requestConsent={() => setShowConsent(true)}
                   />
                 </FocusTrap>
               }

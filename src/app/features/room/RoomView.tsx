@@ -1,5 +1,5 @@
-import React, { useCallback, useRef } from 'react';
-import { Box, Text, config } from 'folds';
+import React, { useCallback, useRef, useState } from 'react';
+import { Box, Button, Text, config } from 'folds';
 import { EventType } from 'matrix-js-sdk';
 import { ReactEditor } from 'slate-react';
 import { isKeyHotkey } from 'is-hotkey';
@@ -22,6 +22,7 @@ import { useSetting } from '../../state/hooks/settings';
 import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { useRoomCreators } from '../../hooks/useRoomCreators';
 import { useRoom } from '../../hooks/useRoom';
+import { getRoomOwner, isPatientRoom } from '../../kiconnect/logic/roomState';
 
 const FN_KEYS_REGEX = /^F\d+$/;
 const shouldFocusMessageField = (evt: KeyboardEvent): boolean => {
@@ -63,10 +64,34 @@ export function RoomView({ eventId }: { eventId?: string }) {
   const room = useRoom();
   const { roomId } = room;
   const editor = useEditor();
+  const [sendingConsent, setSendingConsent] = useState(false);
 
   const mx = useMatrixClient();
 
   const tombstoneEvent = useStateEvent(room, StateEvent.RoomTombstone);
+  const consentEvent = useStateEvent(
+    room,
+    'io.kiconnect.consent.current' as StateEvent
+  );
+  const ownPatientRoom = isPatientRoom(room) && getRoomOwner(room) === mx.getUserId();
+  const consentContent = consentEvent?.getContent();
+  const ownConsent = consentContent?.matrix_user_id === mx.getUserId() ? consentContent : undefined;
+  const consentAccepted = ownConsent?.status === 'accepted';
+  const consentBlocksInput = ownPatientRoom && !consentAccepted;
+  const consentPending = ownConsent?.status === 'pending';
+
+  const sendConsentReply = async (accepted: boolean) => {
+    if (sendingConsent) return;
+    setSendingConsent(true);
+    try {
+      await mx.sendEvent(roomId, 'm.room.message', {
+        msgtype: 'm.text',
+        body: accepted ? 'ICH STIMME ZU' : 'ICH STIMME NICHT ZU',
+      });
+    } finally {
+      setSendingConsent(false);
+    }
+  };
   const powerLevels = usePowerLevelsContext();
   const creators = useRoomCreators(room);
 
@@ -77,7 +102,7 @@ export function RoomView({ eventId }: { eventId?: string }) {
     window,
     useCallback(
       (evt) => {
-        if (editableActiveElement()) return;
+        if (editableActiveElement() || consentBlocksInput) return;
         const portalContainer = document.getElementById('portalContainer');
         if (portalContainer && portalContainer.children.length > 0) {
           return;
@@ -86,7 +111,7 @@ export function RoomView({ eventId }: { eventId?: string }) {
           ReactEditor.focus(editor);
         }
       },
-      [editor]
+      [editor, consentBlocksInput]
     )
   );
 
@@ -112,7 +137,7 @@ export function RoomView({ eventId }: { eventId?: string }) {
             />
           ) : (
             <>
-              {canMessage && (
+              {canMessage && !consentBlocksInput && (
                 <RoomInput
                   room={room}
                   editor={editor}
@@ -120,6 +145,35 @@ export function RoomView({ eventId }: { eventId?: string }) {
                   fileDropContainerRef={roomViewRef}
                   ref={roomInputRef}
                 />
+              )}
+              {canMessage && consentBlocksInput && (
+                <RoomInputPlaceholder
+                  style={{ padding: config.space.S200 }}
+                  alignItems="Center"
+                  justifyContent="Center"
+                >
+                  <Box direction="Column" gap="200" alignItems="Center">
+                    <Text align="Center">
+                      {consentPending
+                        ? 'Bitte bestätigen Sie zuerst die Einverständniserklärung im Chat.'
+                        : 'Der Chat ist ohne gültige Einwilligung gesperrt.'}
+                    </Text>
+                    {consentPending && (
+                      <Box gap="200" style={{ flexWrap: 'wrap', justifyContent: 'center' }}>
+                        <Button onClick={() => sendConsentReply(true)} disabled={sendingConsent}>
+                          Ich stimme zu
+                        </Button>
+                        <Button
+                          variant="Secondary"
+                          onClick={() => sendConsentReply(false)}
+                          disabled={sendingConsent}
+                        >
+                          Ich stimme nicht zu
+                        </Button>
+                      </Box>
+                    )}
+                  </Box>
+                </RoomInputPlaceholder>
               )}
               {!canMessage && (
                 <RoomInputPlaceholder

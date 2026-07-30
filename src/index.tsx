@@ -17,6 +17,7 @@ import App from './app/pages/App';
 import './app/i18n';
 import { pushSessionToSW } from './sw-session';
 import { getFallbackSession } from './app/state/sessions';
+import { handleTeamColdStart } from './app/kiconnect/logic/teamColdStart';
 
 document.body.classList.add(configClass, varsClass);
 
@@ -67,4 +68,31 @@ const mountApp = () => {
   root.render(<App />);
 };
 
-mountApp();
+const startApp = async () => {
+  try {
+    if (await handleTeamColdStart()) return;
+  } catch (error) {
+    console.error('Team cold-start logout failed', error);
+    sessionStorage.removeItem('kiconnect.team-runtime-session.v1');
+    document.body.innerHTML = `
+      <main style="min-height:100vh;display:grid;place-items:center;background:#f7fafb">
+        <section style="max-width:440px;padding:28px;text-align:center;font-family:Inter,system-ui,sans-serif">
+          <h1 style="margin:0 0 14px;color:#1e7f93;font-size:30px">KI connect</h1>
+          <p style="color:#263238;font-size:17px;line-height:1.5">
+            Die vorherige Team-Sitzung konnte noch nicht sicher beendet werden.
+          </p>
+          <button id="kiconnect-team-logout-retry" type="button"
+            style="border:0;border-radius:12px;background:#1e7f93;color:#fff;padding:13px 20px;font-size:16px;font-weight:700;cursor:pointer">
+            Erneut versuchen
+          </button>
+        </section>
+      </main>`;
+    document.getElementById('kiconnect-team-logout-retry')?.addEventListener('click', () => {
+      window.location.reload();
+    });
+    return;
+  }
+  mountApp();
+};
+
+void startApp();
