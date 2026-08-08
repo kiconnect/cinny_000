@@ -1,4 +1,5 @@
 import type { MatrixClient } from "matrix-js-sdk";
+import { getRoomOwner } from "./roomState";
 
 type CaseStatus = "open" | "done";
 type CaseRole = "arzt" | "team";
@@ -105,7 +106,8 @@ export async function delete_done(
 
     const kindEv = room.currentState?.getStateEvents?.("io.kiconnect.room", "");
     const kind = kindEv?.getContent?.()?.kind;
-    if (kind !== "patient") continue;
+    if (kind !== "patient" && kind !== "team_communication") continue;
+    if (getRoomOwner(room) === mx.getUserId()) continue;
 
     const caseEv = room.currentState?.getStateEvents?.("io.kiconnect.case", "");
     const caseContent = caseEv?.getContent?.() as CaseContent | undefined;

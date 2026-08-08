@@ -239,13 +239,20 @@ type CaseContent = {
   };
 };
 
-function getRoleEntryState(entry: CaseRoleEntry | string | undefined): 'open' | 'done' {
+type CaseStatus = 'open' | 'pending' | 'done';
+
+function getRoleEntryState(entry: CaseRoleEntry | string | undefined): CaseStatus {
   if (typeof entry === 'string') {
-    return entry.trim().toLowerCase() === 'done' ? 'done' : 'open';
+    const value = entry.trim().toLowerCase();
+    if (value === 'done') return 'done';
+    if (value === 'pending') return 'pending';
+    return 'open';
   }
 
   const value = String(entry?.state || '').trim().toLowerCase();
-  return value === 'done' ? 'done' : 'open';
+  if (value === 'done') return 'done';
+  if (value === 'pending') return 'pending';
+  return 'open';
 }
 
 function isCaseFullyDone(content: CaseContent | undefined): boolean {
@@ -254,6 +261,18 @@ function isCaseFullyDone(content: CaseContent | undefined): boolean {
   return (['bot', 'arzt', 'team'] as const).every(
     (role) => getRoleEntryState(content.roles?.[role]) === 'done'
   );
+}
+
+function getPatientCaseStatus(content: CaseContent | undefined): CaseStatus {
+  if (!content?.roles) return 'open';
+
+  const states = (['bot', 'arzt', 'team'] as const).map((role) =>
+    getRoleEntryState(content.roles?.[role])
+  );
+
+  if (states.every((state) => state === 'done')) return 'done';
+  if (states.some((state) => state === 'pending')) return 'pending';
+  return 'open';
 }
 
 function getMessagePreview(room: Room): { body: string; ts: number } | undefined {
@@ -404,9 +423,13 @@ export function RoomNavItem({
 
   const caseRole = getRoleFromSpaceId(caseContent, selectedSpaceId) || getRoleFromCurrentUser(mx, caseContent);
 
-  const caseDone = caseRole
-    ? getRoleEntryState(caseContent?.roles?.[caseRole]) === 'done'
-    : isPatientRoom(room) && isCaseFullyDone(caseContent);
+  const caseStatus = caseRole
+    ? getRoleEntryState(caseContent?.roles?.[caseRole])
+    : isPatientRoom(room)
+      ? getPatientCaseStatus(caseContent)
+      : 'done';
+  const caseDone = caseStatus === 'done';
+  const casePending = caseStatus === 'pending';
   const ownTeamRoom = isOwnedTeamRoom(room, mx.getUserId());
 
   const [, forceUpdate] = useState(0);
@@ -561,7 +584,7 @@ export function RoomNavItem({
                 size="T400"
                 truncate
                 style={{
-                  color: caseDone ? undefined : '#c0392b',
+                  color: casePending ? '#1E7F93' : caseDone ? undefined : '#c0392b',
                   fontWeight: caseDone ? undefined : '600',
                   opacity: caseDone ? 0.4 : 0.9,
                   textDecoration: caseDone ? 'line-through' : 'none',

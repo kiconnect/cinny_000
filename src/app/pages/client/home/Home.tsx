@@ -1,4 +1,5 @@
 import React, { MouseEventHandler, forwardRef, useMemo, useRef, useState } from 'react';
+import type { Room } from 'matrix-js-sdk';
 import { useNavigate } from 'react-router-dom';
 import {
   Avatar,
@@ -66,7 +67,11 @@ import { UseStateProvider } from '../../../components/UseStateProvider';
 import { JoinAddressPrompt } from '../../../components/join-address-prompt';
 import { _RoomSearchParams } from '../../paths';
 import kiconnectIcon from '../../../assets/ICON_1_3_2026_bkg_leer.png';
-import { isOwnedTeamRoom } from '../../../kiconnect/logic/roomState';
+import {
+  getRoomOwner,
+  isOwnedTeamCommunicationRoom,
+  isOwnedTeamRoom,
+} from '../../../kiconnect/logic/roomState';
 import { useStateEventCallback } from '../../../hooks/useStateEventCallback';
 
 type HomeMenuProps = {
@@ -204,6 +209,21 @@ function HomeEmpty() {
 }
 
 const DEFAULT_CATEGORY_ID = makeNavCategoryId('home', 'room');
+
+function isOpenTeamRequestRoom(room: Room | null | undefined, currentUserId: string | null): boolean {
+  if (!room || !currentUserId) return false;
+  if (isOwnedTeamCommunicationRoom(room, currentUserId)) return false;
+  if (getRoomOwner(room) === currentUserId) return false;
+
+  const kind = room.currentState?.getStateEvents?.('io.kiconnect.room', '')?.getContent?.()?.kind;
+  if (kind !== 'team_communication') return false;
+
+  const request = room.currentState
+    ?.getStateEvents?.('io.kiconnect.team_request', '')
+    ?.getContent?.();
+  return String(request?.status || '').trim().toLowerCase() === 'open';
+}
+
 export function Home() {
   const mx = useMatrixClient();
   useNavToActivePathMapper('home');
@@ -222,7 +242,7 @@ export function Home() {
   const [roomStateVersion, setRoomStateVersion] = useState(0);
 
   useStateEventCallback(mx, (event) => {
-    if (event.getType() === 'io.kiconnect.room') {
+    if (event.getType() === 'io.kiconnect.room' || event.getType() === 'io.kiconnect.team_request') {
       setRoomStateVersion((version) => version + 1);
     }
   });
@@ -233,14 +253,34 @@ export function Home() {
         ? factoryRoomIdByActivity(mx)
         : factoryRoomIdByAtoZ(mx)
     );
-    const pinnedRooms = items.filter((rId) => isOwnedTeamRoom(mx.getRoom(rId), currentUserId));
-    const otherRooms = items.filter((rId) => !isOwnedTeamRoom(mx.getRoom(rId), currentUserId));
-    const sortedItems = [...pinnedRooms, ...otherRooms];
+    const incomingTeamRequestRooms = items.filter((rId) =>
+      isOpenTeamRequestRoom(mx.getRoom(rId), currentUserId)
+    );
+    const pinnedTeamRooms = items.filter((rId) => isOwnedTeamRoom(mx.getRoom(rId), currentUserId));
+    const pinnedCommunicationRooms = items.filter((rId) =>
+      isOwnedTeamCommunicationRoom(mx.getRoom(rId), currentUserId)
+    );
+    const otherRooms = items.filter((rId) => {
+      const room = mx.getRoom(rId);
+      return (
+        !isOpenTeamRequestRoom(room, currentUserId) &&
+        !isOwnedTeamRoom(room, currentUserId) &&
+        !isOwnedTeamCommunicationRoom(room, currentUserId)
+      );
+    });
+    const sortedItems = [
+      ...incomingTeamRequestRooms,
+      ...pinnedTeamRooms,
+      ...pinnedCommunicationRooms,
+      ...otherRooms,
+    ];
 
     if (closedCategories.has(DEFAULT_CATEGORY_ID)) {
       return sortedItems.filter(
         (rId) =>
           isOwnedTeamRoom(mx.getRoom(rId), currentUserId) ||
+          isOwnedTeamCommunicationRoom(mx.getRoom(rId), currentUserId) ||
+          isOpenTeamRequestRoom(mx.getRoom(rId), currentUserId) ||
           roomToUnread.has(rId) ||
           rId === selectedRoomId
       );

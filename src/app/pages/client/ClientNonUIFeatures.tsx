@@ -11,7 +11,7 @@ import { settingsAtom } from '../../state/settings';
 import { allInvitesAtom } from '../../state/room-list/inviteList';
 import { usePreviousValue } from '../../hooks/usePreviousValue';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
-import { getInboxInvitesPath, getInboxNotificationsPath } from '../pathUtils';
+import { getHomeRoomPath, getInboxInvitesPath, getInboxNotificationsPath } from '../pathUtils';
 import {
   getMemberDisplayName,
   getNotificationType,
@@ -28,6 +28,16 @@ import { TeamIdleMonitorProvider } from '../../kiconnect/idle/TeamIdleMonitor';
 
 const KIconnectLogo = '/kiconnect-app-icon-v5.png';
 const KIconnectFavicon = '/kiconnect-desktop-v2-48.png';
+
+function isWindowsClient(): boolean {
+  const uaData = navigator.userAgentData as { platform?: string } | undefined;
+  const platform = String(uaData?.platform || navigator.platform || '').toLowerCase();
+  return platform.includes('win');
+}
+
+function isTeamMxid(sender: string | undefined): boolean {
+  return /^@z[^:]*:kiconnect\.at$/i.test(String(sender || '').trim());
+}
 
 function SystemEmojiFeature() {
   const [twitterEmoji] = useSetting(settingsAtom, 'twitterEmoji');
@@ -161,6 +171,56 @@ function MessageNotifications() {
     [locked, navigate]
   );
 
+  const notifyTeamMessage = useCallback(
+    ({
+      username,
+      roomId,
+      eventId,
+    }: {
+      username: string;
+      roomId: string;
+      eventId: string;
+    }) => {
+      const url = getHomeRoomPath(roomId, eventId);
+      const options: NotificationOptions = {
+        icon: KIconnectLogo,
+        badge: KIconnectLogo,
+        body: `Neue Team-Nachricht von ${username}`,
+        tag: `kiconnect-team-${roomId}`,
+        silent: true,
+        requireInteraction: true,
+        data: { url },
+      };
+
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.ready
+          .then((registration) => registration.showNotification('KI-Connect Team', options))
+          .catch(() => {
+            const noti = new window.Notification('KI-Connect Team', options);
+            noti.onclick = () => {
+              if (!window.closed) navigate(url);
+              noti.close();
+              notifRef.current = undefined;
+            };
+            notifRef.current?.close();
+            notifRef.current = noti;
+          });
+        return;
+      }
+
+      const noti = new window.Notification('KI-Connect Team', options);
+      noti.onclick = () => {
+        if (!window.closed) navigate(url);
+        noti.close();
+        notifRef.current = undefined;
+      };
+
+      notifRef.current?.close();
+      notifRef.current = noti;
+    },
+    [navigate]
+  );
+
   const playSound = useCallback(() => {
     const audioElement = audioRef.current;
     audioElement?.play();
@@ -175,7 +235,6 @@ function MessageNotifications() {
       data
     ) => {
       if (mx.getSyncState() !== 'SYNCING') return;
-      if (document.hasFocus() && (selectedRoomId === room?.roomId || notificationSelected)) return;
       if (
         !room ||
         !data.liveEvent ||
@@ -189,6 +248,20 @@ function MessageNotifications() {
       const sender = mEvent.getSender();
       const eventId = mEvent.getId();
       if (!sender || !eventId || mEvent.getSender() === mx.getUserId()) return;
+
+      const teamNotification = isWindowsClient() && !document.hasFocus() && isTeamMxid(sender);
+      if (teamNotification) {
+        if (notificationPermission('granted')) {
+          notifyTeamMessage({
+            username: getMemberDisplayName(room, sender) ?? getMxIdLocalPart(sender) ?? sender,
+            roomId: room.roomId,
+            eventId,
+          });
+        }
+        return;
+      }
+
+      if (document.hasFocus() && (selectedRoomId === room?.roomId || notificationSelected)) return;
       const unreadInfo = getUnreadInfo(room);
       const cachedUnreadInfo = unreadCacheRef.current.get(room.roomId);
       unreadCacheRef.current.set(room.roomId, unreadInfo);

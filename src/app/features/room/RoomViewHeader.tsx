@@ -85,6 +85,10 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(
     const { navigateRoom } = useRoomNavigate();
     const [loggingOut, setLoggingOut] = useState(false);
     const [pushStatus, setPushStatus] = useState<WebPushStatus>('off');
+    const [localNotificationStatus, setLocalNotificationStatus] =
+      useState<NotificationPermission>(
+        'Notification' in window ? window.Notification.permission : 'denied'
+      );
     const [changingPush, setChangingPush] = useState(false);
     const [pushError, setPushError] = useState<string>();
     const [idleTimeoutInput, setIdleTimeoutInput] = useState(String(idleTimeoutMinutes));
@@ -99,11 +103,31 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(
         .catch(() => setPushStatus('off'));
     }, [mx]);
 
+    const webPushConfigured = Boolean(
+      clientConfig.webPush?.gatewayUrl && clientConfig.webPush?.vapidPublicKey
+    );
+
     const handlePushToggle = async () => {
       if (changingPush || pushStatus === 'unsupported') return;
       setChangingPush(true);
       setPushError(undefined);
       try {
+        if (!webPushConfigured) {
+          if (!('Notification' in window)) {
+            setLocalNotificationStatus('denied');
+            setPushError('Benachrichtigungen werden von diesem Browser nicht unterstützt.');
+            return;
+          }
+          const permission = await window.Notification.requestPermission();
+          setLocalNotificationStatus(permission);
+          if (permission !== 'granted') {
+            setPushError('Benachrichtigungen wurden nicht erlaubt.');
+            return;
+          }
+          setPushError(undefined);
+          return;
+        }
+
         if (pushStatus === 'on') {
           await disableWebPush(mx);
           setPushStatus('off');
@@ -196,14 +220,27 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(
             onClick={handlePushToggle}
             size="300"
             radii="300"
-            disabled={changingPush || pushStatus === 'unsupported'}
+            disabled={
+              changingPush ||
+              pushStatus === 'unsupported' ||
+              (!webPushConfigured && localNotificationStatus === 'denied')
+            }
           >
             <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
-              {changingPush
-                ? 'Push-Nachrichten …'
-                : `Push-Nachrichten: ${pushStatus === 'on' ? 'Ein' : 'Aus'}`}
+              {changingPush && 'Benachrichtigungen …'}
+              {!changingPush &&
+                (webPushConfigured
+                  ? `Push-Nachrichten: ${pushStatus === 'on' ? 'Ein' : 'Aus'}`
+                  : `Windows-Benachrichtigungen: ${
+                      localNotificationStatus === 'granted' ? 'Ein' : 'Aus'
+                    }`)}
             </Text>
           </MenuItem>
+          {!webPushConfigured && localNotificationStatus === 'denied' && (
+            <Text style={{ padding: `0 ${config.space.S200}` }} size="T200" priority="300">
+              Im Browser oder in Windows blockiert.
+            </Text>
+          )}
           {pushStatus === 'unsupported' && (
             <Text style={{ padding: `0 ${config.space.S200}` }} size="T200" priority="300">
               Nur in der installierten PWA verfügbar.
