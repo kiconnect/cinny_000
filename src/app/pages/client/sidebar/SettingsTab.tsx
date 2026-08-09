@@ -10,6 +10,8 @@ import { Settings } from '../../../features/settings';
 import { useUserProfile } from '../../../hooks/useUserProfile';
 import { Modal500 } from '../../../components/Modal500';
 
+const KICONNECT_SIDEBAR_AVATAR_BACKGROUND = '#ffffff';
+
 export function SettingsTab() {
   const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
@@ -34,6 +36,9 @@ export function SettingsTab() {
             <UserAvatar
               userId={userId}
               src={avatarUrl}
+              fallbackStyle={{
+                backgroundColor: KICONNECT_SIDEBAR_AVATAR_BACKGROUND,
+              }}
               renderFallback={() => <Text size="H4">{nameInitials(displayName)}</Text>}
             />
           </SidebarAvatar>

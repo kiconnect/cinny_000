@@ -99,6 +99,12 @@ type SpaceMenuProps = {
   requestClose: () => void;
   onUnpin?: (roomId: string) => void;
 };
+
+const isKiconnectRoleSpace = (room: Room | null | undefined): boolean => {
+  const name = room?.name?.trim().toLocaleLowerCase('de-AT');
+  return name === 'team' || name === 'arzt';
+};
+
 const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(
   ({ room, requestClose, onUnpin }, ref) => {
     const mx = useMatrixClient();
@@ -618,6 +624,24 @@ export function SpaceTabs({ scrollRef }: SpaceTabsProps) {
   const navToActivePath = useAtomValue(useNavToActivePathAtom());
   const [openedFolder, setOpenedFolder] = useAtom(useOpenedSidebarFolderAtom());
   const [draggingItem, setDraggingItem] = useState<SidebarDraggable>();
+  const visibleSidebarItems = useMemo<SidebarItems>(
+    () =>
+      sidebarItems.reduce<SidebarItems>((items, item) => {
+        if (typeof item === 'object') {
+          const content = item.content.filter((roomId) => !isKiconnectRoleSpace(mx.getRoom(roomId)));
+          if (content.length > 0) {
+            items.push({ ...item, content });
+          }
+          return items;
+        }
+
+        if (!isKiconnectRoleSpace(mx.getRoom(item))) {
+          items.push(item);
+        }
+        return items;
+      }, []),
+    [mx, sidebarItems]
+  );
 
   useDnDMonitor(
     scrollRef,
@@ -797,12 +821,12 @@ export function SpaceTabs({ scrollRef }: SpaceTabsProps) {
     [mx, sidebarItems, orphanSpaces, localEchoSidebarItem]
   );
 
-  if (sidebarItems.length === 0) return null;
+  if (visibleSidebarItems.length === 0) return null;
   return (
     <>
       <SidebarStackSeparator />
       <SidebarStack>
-        {sidebarItems.map((item) => {
+        {visibleSidebarItems.map((item) => {
           if (typeof item === 'object') {
             if (openedFolder.has(item.id)) {
               return (
