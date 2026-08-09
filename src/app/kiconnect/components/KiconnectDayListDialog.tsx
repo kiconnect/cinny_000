@@ -122,8 +122,14 @@ export default function KiconnectDayListDialog({ room, onFinished }: Props) {
   };
 
   return (
-    <Dialog variant="Surface">
-      <Box direction="Column" gap="300" style={{ padding: 16, minWidth: 360, maxWidth: 560 }}>
+    <Dialog
+      variant="Surface"
+      style={{
+        width: 'min(760px, calc(100vw - 32px))',
+        maxHeight: 'min(760px, calc(100vh - 48px))',
+      }}
+    >
+      <Box direction="Column" gap="300" style={{ padding: 16, minWidth: 360, maxHeight: 'inherit' }}>
         <Text size="H4">Tageslisten</Text>
 
         <Box direction="Row" gap="200">
@@ -175,7 +181,15 @@ export default function KiconnectDayListDialog({ room, onFinished }: Props) {
         {resolvedDay && !error ? <Text size="T200">Kommunikation am {resolvedDay}</Text> : null}
 
         {results.length > 0 ? (
-          <Box direction="Column" gap="100">
+          <Box
+            direction="Column"
+            gap="100"
+            style={{
+              overflow: 'auto',
+              maxHeight: 'min(470px, calc(100vh - 290px))',
+              paddingRight: 4,
+            }}
+          >
             {results.map((item) => (
               <Box
                 key={item.room_id}

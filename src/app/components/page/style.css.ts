@@ -9,7 +9,7 @@ export const PageNav = recipe({
         width: `min(${toRem(384)}, 100vw)`,
       },
       '400': {
-        width: toRem(256),
+        width: toRem(205),
       },
       '300': {
         width: toRem(222),
