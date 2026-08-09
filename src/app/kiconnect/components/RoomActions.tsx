@@ -8,6 +8,7 @@ import { useSelectedSpace } from '../../hooks/router/useSelectedSpace';
 import { getRoomOwner, isPatientRoom, isTeamCommunicationRoom, isTeamRoom } from '../logic/roomState';
 import { delete_done } from '../logic/delete_done';
 import KiconnectSearchDialog from '../components/KiconnectSearchDialog';
+import KiconnectDayListDialog from '../components/KiconnectDayListDialog';
 
 import '../styles/RoomActions.css';
 
@@ -229,6 +230,7 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
   const selectedSpaceId = useSelectedSpace();
 
   const [showSearch, setShowSearch] = useState(false);
+  const [showDayList, setShowDayList] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showBroadcast, setShowBroadcast] = useState(false);
   const [broadcastPreview, setBroadcastPreview] = useState(false);
@@ -521,6 +523,9 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
         {showSearch && (
           <KiconnectSearchDialog room={room} onFinished={() => setShowSearch(false)} />
         )}
+        {showDayList && (
+          <KiconnectDayListDialog room={room} onFinished={() => setShowDayList(false)} />
+        )}
         {showBroadcast && (
           <Overlay open backdrop={<OverlayBackdrop />}>
             <OverlayCenter>
@@ -617,6 +622,7 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
         <div className="kiconnect-room-actions">
           <div className="kiconnect-room-actions-divider" />
           <button onClick={() => setShowSearch(true)}>Suche</button>
+          <button onClick={() => setShowDayList(true)}>Tageslisten</button>
           <button onClick={onDeleteDone}>Erledigte Chats löschen</button>
           <button
             onClick={() => {
