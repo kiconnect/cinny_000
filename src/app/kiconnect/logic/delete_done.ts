@@ -16,6 +16,10 @@ type CaseContent = {
   };
 };
 
+type TeamRequestContent = {
+  status?: string;
+};
+
 function normalizeState(value: unknown): CaseStatus {
   return String(value || "").trim().toLowerCase() === "done" ? "done" : "open";
 }
@@ -79,6 +83,10 @@ function shouldDeleteRoom(
   return getOverallCaseState(content) === "done";
 }
 
+function isDoneTeamRequest(content: TeamRequestContent | undefined): boolean {
+  return String(content?.status || "").trim().toLowerCase() === "done";
+}
+
 async function waitUntilLeft(mx: MatrixClient, roomId: string, timeoutMs = 4000): Promise<void> {
   const started = Date.now();
 
@@ -106,12 +114,18 @@ export async function delete_done(
 
     const kindEv = room.currentState?.getStateEvents?.("io.kiconnect.room", "");
     const kind = kindEv?.getContent?.()?.kind;
-    if (kind !== "patient" && kind !== "team_communication") continue;
-    if (getRoomOwner(room) === mx.getUserId()) continue;
+    if (kind !== "patient" && kind !== "team_communication" && kind !== "team_request") continue;
+    if (kind !== "team_request" && getRoomOwner(room) === mx.getUserId()) continue;
 
-    const caseEv = room.currentState?.getStateEvents?.("io.kiconnect.case", "");
-    const caseContent = caseEv?.getContent?.() as CaseContent | undefined;
-    if (!shouldDeleteRoom(caseContent, selectedSpaceId)) continue;
+    if (kind === "team_request") {
+      const requestEv = room.currentState?.getStateEvents?.("io.kiconnect.team_request", "");
+      const requestContent = requestEv?.getContent?.() as TeamRequestContent | undefined;
+      if (!isDoneTeamRequest(requestContent)) continue;
+    } else {
+      const caseEv = room.currentState?.getStateEvents?.("io.kiconnect.case", "");
+      const caseContent = caseEv?.getContent?.() as CaseContent | undefined;
+      if (!shouldDeleteRoom(caseContent, selectedSpaceId)) continue;
+    }
 
     try {
       await mx.leave(room.roomId);

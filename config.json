@@ -1,26 +1,22 @@
 {
   "defaultHomeserver": 0,
-  "homeserverList": ["dev.kiconnect.at"],
-  "allowCustomHomeservers": true,
+  "homeserverList": ["kiconnect.at"],
+  "allowCustomHomeservers": false,
   "disableSSO": true,
   "hidePasswordLogin": true,
-  "portalUrl": "https://devportal.kiconnect.at",
+  "portalUrl": "https://portal.kiconnect.at",
   "keycloakLogout": {
-    "issuer": "https://devsso.id-am.at/realms/KIconnect",
+    "issuer": "https://sso.id-am.at/realms/KIconnect",
     "clientId": "kiconnect-matrix"
   },
   "keycloakUnlock": {
-    "issuer": "https://devsso.id-am.at/realms/KIconnect",
+    "issuer": "https://sso.id-am.at/realms/KIconnect",
     "clientId": "kiconnect_cinny",
-    "redirectUri": "https://devcinny.kiconnect.at/unlock/callback"
+    "redirectUri": "https://cinny.kiconnect.at/unlock/callback"
   },
   "kiconnectLock": {
     "timeoutMinutes": 5,
-    "preferencesUrl": "https://devportal.kiconnect.at/api/user/preferences/idle-timeout"
-  },
-  "webPush": {
-    "gatewayUrl": "https://devpush.kiconnect.at",
-    "vapidPublicKey": "BPl2wkmkf0y-OQhKZb83CJP5wYSMiMqq_Q-ZT5Y6ZZOSVt8swXhv_4MoKnOr3nLdGwDOtgL2SB-bAT7DABvUHuw"
+    "preferencesUrl": "https://portal.kiconnect.at/api/user/preferences/idle-timeout"
   },
 
   "appearance": {

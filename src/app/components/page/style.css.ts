@@ -6,7 +6,7 @@ export const PageNav = recipe({
   variants: {
     size: {
       '500': {
-        width: `min(${toRem(384)}, 100vw)`,
+        width: `min(${toRem(300)}, 100vw)`,
       },
       '400': {
         width: toRem(205),

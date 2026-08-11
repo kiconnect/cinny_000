@@ -7,6 +7,7 @@ import { useOrphanRooms } from '../../../state/hooks/roomList';
 import {
   isOwnedTeamCommunicationRoom,
   isOwnedTeamRoom,
+  isTeamRequestRoom,
 } from '../../../kiconnect/logic/roomState';
 
 export const useHomeRooms = () => {
@@ -20,7 +21,8 @@ export const useHomeRooms = () => {
     const room = mx.getRoom(roomId);
     return (
       isOwnedTeamRoom(room, currentUserId) ||
-      isOwnedTeamCommunicationRoom(room, currentUserId)
+      isOwnedTeamCommunicationRoom(room, currentUserId) ||
+      isTeamRequestRoom(room)
     );
   });
 

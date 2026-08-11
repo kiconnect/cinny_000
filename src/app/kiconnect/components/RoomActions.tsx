@@ -5,10 +5,11 @@ import type { MatrixClient } from 'matrix-js-sdk';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useSelectedSpace } from '../../hooks/router/useSelectedSpace';
 
-import { getRoomOwner, isPatientRoom, isTeamCommunicationRoom, isTeamRoom } from '../logic/roomState';
+import { getRoomOwner, isPatientRoom, isTeamCommunicationRoom, isTeamRequestRoom, isTeamRoom } from '../logic/roomState';
 import { delete_done } from '../logic/delete_done';
 import KiconnectSearchDialog from '../components/KiconnectSearchDialog';
 import KiconnectDayListDialog from '../components/KiconnectDayListDialog';
+import KiconnectTeamRequestsDialog from '../components/KiconnectTeamRequestsDialog';
 
 import '../styles/RoomActions.css';
 
@@ -16,7 +17,7 @@ type Props = {
   room: Room;
 };
 
-type CaseStatus = 'open' | 'pending' | 'done';
+type CaseStatus = 'open' | 'pending' | 'waiting' | 'done';
 type CaseRole = 'arzt' | 'team';
 
 type CaseRoleEntry = {
@@ -25,6 +26,9 @@ type CaseRoleEntry = {
 };
 
 type CaseContent = {
+  waiting_patient?: boolean;
+  waiting_since?: number | null;
+  waiting_owner_role?: CaseRole | string | null;
   roles?: {
     arzt?: CaseRoleEntry | string;
     team?: CaseRoleEntry | string;
@@ -56,6 +60,7 @@ function normalizeState(value: unknown): CaseStatus {
     .trim()
     .toLowerCase();
   if (norm === 'done') return 'done';
+  if (norm === 'waiting') return 'waiting';
   if (norm === 'pending') return 'pending';
   return 'open';
 }
@@ -183,6 +188,11 @@ function isTeamRequestOpen(content: TeamRequestContent | undefined): boolean {
   return String(content?.status || '').trim().toLowerCase() === 'open';
 }
 
+function isTeamRequestActive(content: TeamRequestContent | undefined): boolean {
+  const status = String(content?.status || '').trim().toLowerCase();
+  return status === 'open' || status === 'pending' || status === 'waiting';
+}
+
 function getOwnRoleStatus(
   mx: MatrixClient,
   room: Room,
@@ -231,6 +241,7 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
 
   const [showSearch, setShowSearch] = useState(false);
   const [showDayList, setShowDayList] = useState(false);
+  const [showTeamRequestsRecent, setShowTeamRequestsRecent] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showBroadcast, setShowBroadcast] = useState(false);
   const [broadcastPreview, setBroadcastPreview] = useState(false);
@@ -246,26 +257,29 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
 
   const teamRoom = useMemo(() => isTeamRoom(room), [room]);
   const teamCommunicationRoom = useMemo(() => isTeamCommunicationRoom(room), [room]);
+  const teamRequestRoom = useMemo(() => isTeamRequestRoom(room), [room]);
   const caseInfo = getOwnRoleStatus(mx, room, selectedSpaceId);
   const roomOwner = getRoomOwner(room);
   const currentUserId = mx.getUserId();
   const teamRequest = getTeamRequestContent(room);
   const teamRequestOpen = isTeamRequestOpen(teamRequest);
+  const teamRequestActive = isTeamRequestActive(teamRequest);
   const teamDirectory = getTeamDirectory(room);
-  const teamRequestOwner = teamCommunicationRoom && roomOwner === currentUserId;
+  const teamRequestOwner = (teamCommunicationRoom || teamRequestRoom) && roomOwner === currentUserId;
   const teamRequestRecipient =
-    teamCommunicationRoom &&
+    (teamCommunicationRoom || teamRequestRoom) &&
     !!currentUserId &&
-    teamRequestOpen &&
+    isTeamRequestActive(teamRequest) &&
     !!teamRequest?.recipients?.[currentUserId];
   const patientRoomOwner =
     isPatientRoom(room) && (roomOwner ? roomOwner === currentUserId : caseInfo.role === undefined);
 
   const erledigtLabel =
-    caseInfo.own === 'done' ? 'Wieder öffnen' : caseInfo.own === 'pending' ? 'Erledigt' : 'Begonnen';
+    caseInfo.own === 'done' ? 'Wieder öffnen' : 'Erledigt';
 
   const canForward =
     !!caseInfo.role && (caseInfo.own === 'open' || caseInfo.own === 'pending') && caseInfo.other === 'done';
+  const waitingPatient = !!caseInfo.role && !!caseInfo.spaceRoomId && !!getCaseContent(room)?.waiting_patient;
 
   const forwardLabel =
     caseInfo.own === 'done' && (caseInfo.other === 'open' || caseInfo.other === 'pending')
@@ -364,6 +378,7 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
         by: mx.getUserId(),
         ts: Date.now(),
         space_room_id: spaceRoomId,
+        target_state: caseInfo.own === 'done' ? 'open' : 'done',
       });
     } catch (e) {
       setErr(toErrString(e));
@@ -412,6 +427,31 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
     } finally {
       setSending(false);
       console.log('[FORWARD] finally');
+    }
+  };
+
+  const onWaitPatient = async () => {
+    if (sending) return;
+
+    setSending(true);
+    setErr(null);
+
+    try {
+      const spaceRoomId = caseInfo.spaceRoomId?.trim();
+
+      if (!isUsableSpaceId(spaceRoomId)) {
+        throw new Error('Keine gültige User-Space-ID verfügbar.');
+      }
+
+      await mx.sendEvent(room.roomId, 'io.kiconnect.case.wait_patient', {
+        by: mx.getUserId(),
+        ts: Date.now(),
+        space_room_id: spaceRoomId,
+      });
+    } catch (e) {
+      setErr(toErrString(e));
+    } finally {
+      setSending(false);
     }
   };
 
@@ -517,6 +557,27 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
     }
   };
 
+  const onSetTeamRequestStatus = async (status: CaseStatus) => {
+    if (sendingTeamRequest) return;
+    setSendingTeamRequest(true);
+    setErr(null);
+    try {
+      await mx.sendEvent(room.roomId, 'io.kiconnect.team.request.status', {
+        status,
+        by: currentUserId,
+        ts: Date.now(),
+      });
+    } catch (e) {
+      setErr(toErrString(e));
+    } finally {
+      setSendingTeamRequest(false);
+    }
+  };
+
+  const recipientCandidates = teamDirectory.filter((member) => member.matrix_user_id !== currentUserId);
+  const arztCandidateCount = recipientCandidates.filter((member) => member.role === 'arzt').length;
+  const teamCandidateCount = recipientCandidates.filter((member) => member.role === 'team').length;
+
   if (teamRoom) {
     return (
       <>
@@ -525,6 +586,16 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
         )}
         {showDayList && (
           <KiconnectDayListDialog room={room} onFinished={() => setShowDayList(false)} />
+        )}
+        {showTeamRequestsRecent && (
+          <Overlay open backdrop={<OverlayBackdrop />}>
+            <OverlayCenter>
+              <KiconnectTeamRequestsDialog
+                room={room}
+                onFinished={() => setShowTeamRequestsRecent(false)}
+              />
+            </OverlayCenter>
+          </Overlay>
         )}
         {showBroadcast && (
           <Overlay open backdrop={<OverlayBackdrop />}>
@@ -618,11 +689,140 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
             </OverlayCenter>
           </Overlay>
         )}
+        {showTeamRequest && (
+          <Overlay open backdrop={<OverlayBackdrop />}>
+            <OverlayCenter>
+              <Dialog variant="Surface" style={{ width: 'min(560px, calc(100vw - 32px))' }}>
+                <Box direction="Column" gap="400" style={{ padding: 24 }}>
+                  <Box direction="Column" gap="200">
+                    <Text size="H4">Empfänger</Text>
+                    <Text priority="400">
+                      Wählen Sie die Empfänger für eine neue Team-Anfrage aus.
+                    </Text>
+                  </Box>
+
+                  <input
+                    value={teamRequestTopic}
+                    onChange={(event) => setTeamRequestTopic(event.target.value)}
+                    autoFocus
+                    placeholder="Topic"
+                    style={{
+                      width: '100%',
+                      boxSizing: 'border-box',
+                      border: '1px solid #8ca4aa',
+                      borderRadius: 12,
+                      padding: 12,
+                      font: 'inherit',
+                    }}
+                  />
+
+                  <Box direction="Row" gap="200">
+                    <Button
+                      variant="Secondary"
+                      onClick={() => {
+                        setShowTeamRequest(false);
+                        setShowTeamRequestsRecent(true);
+                      }}
+                    >
+                      Letzte 3 Tage
+                    </Button>
+                  </Box>
+
+                  <Box direction="Column" gap="200">
+                    <button
+                      type="button"
+                      onClick={() => selectRecipientsByRole('arzt')}
+                      disabled={arztCandidateCount === 0}
+                      style={{
+                        textAlign: 'left',
+                        border: '1px solid #b8c7cb',
+                        borderRadius: 10,
+                        padding: '10px 12px',
+                        opacity: arztCandidateCount === 0 ? 0.55 : 1,
+                      }}
+                    >
+                      Ärzt*innen alle ({arztCandidateCount})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => selectRecipientsByRole('team')}
+                      disabled={teamCandidateCount === 0}
+                      style={{
+                        textAlign: 'left',
+                        border: '1px solid #b8c7cb',
+                        borderRadius: 10,
+                        padding: '10px 12px',
+                        opacity: teamCandidateCount === 0 ? 0.55 : 1,
+                      }}
+                    >
+                      Team alle ({teamCandidateCount})
+                    </button>
+                    {recipientCandidates.length === 0 && (
+                      <Text priority="400">
+                        Keine weiteren Empfänger vorhanden. Sie selbst werden nicht als
+                        Empfänger angeboten.
+                      </Text>
+                    )}
+                    {recipientCandidates.map((member) => (
+                      <label
+                        key={member.matrix_user_id}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 10,
+                          border: '1px solid #c9d6da',
+                          borderRadius: 10,
+                          padding: '10px 12px',
+                          cursor: 'pointer',
+                          background: selectedRecipients.includes(member.matrix_user_id)
+                            ? '#e6f4f7'
+                            : '#fff',
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedRecipients.includes(member.matrix_user_id)}
+                          onChange={() => toggleRecipient(member.matrix_user_id)}
+                        />
+                        <span>
+                          {member.display_name} ({member.role === 'arzt' ? 'Ärzt*in' : 'Team'})
+                        </span>
+                      </label>
+                    ))}
+                  </Box>
+
+                  <Text priority="400">Ausgewählt: {selectedRecipients.length}</Text>
+
+                  {err && <Text size="T300">{err}</Text>}
+                  <Box direction="Row" gap="200" justifyContent="End">
+                    <Button variant="Secondary" onClick={closeTeamRequest} disabled={sendingTeamRequest}>
+                      Abbrechen
+                    </Button>
+                    <Button
+                      onClick={onSendTeamRequest}
+                      disabled={sendingTeamRequest || !teamRequestTopic.trim() || selectedRecipients.length === 0}
+                    >
+                      {sendingTeamRequest ? '…' : 'Einladen'}
+                    </Button>
+                  </Box>
+                </Box>
+              </Dialog>
+            </OverlayCenter>
+          </Overlay>
+        )}
 
         <div className="kiconnect-room-actions">
           <div className="kiconnect-room-actions-divider" />
           <button onClick={() => setShowSearch(true)}>Suche</button>
           <button onClick={() => setShowDayList(true)}>Tageslisten</button>
+          <button
+            onClick={() => {
+              setErr(null);
+              setShowTeamRequest(true);
+            }}
+          >
+            Team-Anfrage
+          </button>
           <button onClick={onDeleteDone}>Erledigte Chats löschen</button>
           <button
             onClick={() => {
@@ -652,7 +852,7 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
                 <Box direction="Column" gap="400" style={{ padding: 24 }}>
                   <Box direction="Column" gap="200">
                     <Text size="H4">Empfänger</Text>
-                    {teamRequestOpen ? (
+                    {teamRequestActive ? (
                       <Text priority="400">
                         Es gibt bereits eine offene Anfrage: {teamRequest?.topic || 'ohne Topic'}.
                         Bitte zuerst erledigen oder zurücksetzen.
@@ -664,7 +864,7 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
                     )}
                   </Box>
 
-                  {teamRequestOpen ? (
+                  {teamRequestActive ? (
                     <Box direction="Row" gap="200" justifyContent="End">
                       <Button variant="Secondary" onClick={closeTeamRequest} disabled={sendingTeamRequest}>
                         Abbrechen
@@ -790,7 +990,7 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
               >
                 Empfänger
               </button>
-              {teamRequestOpen && (
+              {teamRequestActive && (
                 <button onClick={onResetTeamRequest} disabled={sendingTeamRequest}>
                   {sendingTeamRequest ? '…' : 'Zurücksetzen'}
                 </button>
@@ -805,6 +1005,22 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
           {err && !showTeamRequest && <span style={{ marginLeft: 8, fontSize: 12 }}>{err}</span>}
         </div>
       </>
+    );
+  }
+
+  if (teamRequestRoom) {
+    const requestStatus = normalizeState(teamRequest?.status);
+    const requestLabel = requestStatus === 'done' ? 'Wieder öffnen' : 'Erledigt';
+    const nextStatus: CaseStatus = requestStatus === 'done' ? 'open' : 'done';
+
+    return (
+      <div className="kiconnect-room-actions">
+        <div className="kiconnect-room-actions-divider" />
+        <button onClick={() => onSetTeamRequestStatus(nextStatus)} disabled={sendingTeamRequest}>
+          {sendingTeamRequest ? '…' : requestLabel}
+        </button>
+        {err && <span style={{ marginLeft: 8, fontSize: 12 }}>{err}</span>}
+      </div>
     );
   }
 
@@ -861,6 +1077,12 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
         {canForward && (
           <button onClick={onForward} disabled={sending}>
             {sending ? '…' : forwardLabel}
+          </button>
+        )}
+
+        {!!caseInfo.role && (
+          <button onClick={onWaitPatient} disabled={sending || waitingPatient}>
+            {sending ? '…' : waitingPatient ? 'Wartet auf Patient' : 'Warte auf Patient'}
           </button>
         )}
 

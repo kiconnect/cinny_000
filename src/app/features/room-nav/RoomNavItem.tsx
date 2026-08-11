@@ -63,7 +63,7 @@ import { useAutoDiscoveryInfo } from '../../hooks/useAutoDiscoveryInfo';
 import { livekitSupport } from '../../hooks/useLivekitSupport';
 import { StateEvent } from '../../../types/matrix/room';
 import { webRTCSupported } from '../../utils/rtc';
-import { isOwnedTeamRoom, isPatientRoom } from '../../kiconnect/logic/roomState';
+import { isOwnedTeamRoom, isPatientRoom, isTeamRequestRoom } from '../../kiconnect/logic/roomState';
 import { timeHourMinute, today, yesterday } from '../../utils/time';
 
 type RoomNavItemMenuProps = {
@@ -232,6 +232,9 @@ type CaseRoleEntry = {
 };
 
 type CaseContent = {
+  waiting_patient?: boolean;
+  waiting_since?: number | null;
+  waiting_owner_role?: string | null;
   roles?: {
     bot?: CaseRoleEntry | string;
     arzt?: CaseRoleEntry | string;
@@ -239,19 +242,32 @@ type CaseContent = {
   };
 };
 
-type CaseStatus = 'open' | 'pending' | 'done';
+type CaseStatus = 'open' | 'pending' | 'waiting' | 'done';
 
 function getRoleEntryState(entry: CaseRoleEntry | string | undefined): CaseStatus {
   if (typeof entry === 'string') {
     const value = entry.trim().toLowerCase();
     if (value === 'done') return 'done';
+    if (value === 'waiting') return 'waiting';
     if (value === 'pending') return 'pending';
     return 'open';
   }
 
   const value = String(entry?.state || '').trim().toLowerCase();
   if (value === 'done') return 'done';
+  if (value === 'waiting') return 'waiting';
   if (value === 'pending') return 'pending';
+  return 'open';
+}
+
+function getTeamRequestStatus(room: Room): CaseStatus {
+  const request = room.currentState
+    ?.getStateEvents?.('io.kiconnect.team_request', '')
+    ?.getContent?.();
+  const status = String(request?.status || '').trim().toLowerCase();
+  if (status === 'done') return 'done';
+  if (status === 'waiting') return 'waiting';
+  if (status === 'pending') return 'pending';
   return 'open';
 }
 
@@ -423,13 +439,18 @@ export function RoomNavItem({
 
   const caseRole = getRoleFromSpaceId(caseContent, selectedSpaceId) || getRoleFromCurrentUser(mx, caseContent);
 
-  const caseStatus = caseRole
-    ? getRoleEntryState(caseContent?.roles?.[caseRole])
+  const caseStatus = isTeamRequestRoom(room)
+      ? getTeamRequestStatus(room)
+    : caseRole
+      ? getRoleEntryState(caseContent?.roles?.[caseRole])
     : isPatientRoom(room)
       ? getPatientCaseStatus(caseContent)
       : 'done';
+  const caseWaitingPatient = isPatientRoom(room) && caseContent?.waiting_patient === true;
   const caseDone = caseStatus === 'done';
   const casePending = caseStatus === 'pending';
+  const caseWaiting = caseStatus === 'waiting';
+  const caseEffectivelyDone = caseDone && !caseWaitingPatient;
   const ownTeamRoom = isOwnedTeamRoom(room, mx.getUserId());
 
   const [, forceUpdate] = useState(0);
@@ -443,7 +464,9 @@ export function RoomNavItem({
   useStateEventCallback(mx, (event) => {
     if (
       event.getRoomId() === room.roomId &&
-      (event.getType() === 'io.kiconnect.case' || event.getType() === 'io.kiconnect.room')
+      (event.getType() === 'io.kiconnect.case' ||
+        event.getType() === 'io.kiconnect.room' ||
+        event.getType() === 'io.kiconnect.team_request')
     ) {
       forceUpdate((x) => x + 1);
     }
@@ -584,10 +607,18 @@ export function RoomNavItem({
                 size="T400"
                 truncate
                 style={{
-                  color: casePending ? '#1E7F93' : caseDone ? undefined : '#c0392b',
-                  fontWeight: caseDone ? undefined : '600',
-                  opacity: caseDone ? 0.4 : 0.9,
-                  textDecoration: caseDone ? 'line-through' : 'none',
+                  color: caseWaitingPatient
+                    ? '#2368b8'
+                    : caseWaiting
+                      ? '#2368b8'
+                    : casePending
+                      ? '#1E7F93'
+                      : caseEffectivelyDone
+                        ? undefined
+                        : '#c0392b',
+                  fontWeight: caseEffectivelyDone ? undefined : '600',
+                  opacity: caseEffectivelyDone ? 0.4 : 0.9,
+                  textDecoration: caseEffectivelyDone ? 'line-through' : 'none',
                   lineHeight: '1.2',
                 }}
               >
@@ -598,7 +629,7 @@ export function RoomNavItem({
                 size="T400"
                 priority="300"
                 truncate
-                style={{ lineHeight: '1.2', opacity: caseDone ? 0.45 : 0.75 }}
+                style={{ lineHeight: '1.2', opacity: caseEffectivelyDone ? 0.45 : 0.75 }}
               >
                 {messagePreview?.body || 'Noch keine Nachricht'}
               </Text>

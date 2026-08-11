@@ -71,6 +71,8 @@ import {
   getRoomOwner,
   isOwnedTeamCommunicationRoom,
   isOwnedTeamRoom,
+  isPatientRoom,
+  isTeamRequestRoom,
 } from '../../../kiconnect/logic/roomState';
 import { useStateEventCallback } from '../../../hooks/useStateEventCallback';
 
@@ -216,12 +218,19 @@ function isOpenTeamRequestRoom(room: Room | null | undefined, currentUserId: str
   if (getRoomOwner(room) === currentUserId) return false;
 
   const kind = room.currentState?.getStateEvents?.('io.kiconnect.room', '')?.getContent?.()?.kind;
-  if (kind !== 'team_communication') return false;
+  if (kind !== 'team_request' && kind !== 'team_communication') return false;
 
   const request = room.currentState
     ?.getStateEvents?.('io.kiconnect.team_request', '')
     ?.getContent?.();
-  return String(request?.status || '').trim().toLowerCase() === 'open';
+  const status = String(request?.status || '').trim().toLowerCase();
+  return status === 'open' || status === 'pending' || status === 'waiting';
+}
+
+function isWaitingPatientRoom(room: Room | null | undefined): boolean {
+  if (!room || !isPatientRoom(room)) return false;
+  const content = room.currentState?.getStateEvents?.('io.kiconnect.case', '')?.getContent?.();
+  return content?.waiting_patient === true;
 }
 
 export function Home() {
@@ -242,7 +251,11 @@ export function Home() {
   const [roomStateVersion, setRoomStateVersion] = useState(0);
 
   useStateEventCallback(mx, (event) => {
-    if (event.getType() === 'io.kiconnect.room' || event.getType() === 'io.kiconnect.team_request') {
+    if (
+      event.getType() === 'io.kiconnect.room' ||
+      event.getType() === 'io.kiconnect.team_request' ||
+      event.getType() === 'io.kiconnect.case'
+    ) {
       setRoomStateVersion((version) => version + 1);
     }
   });
@@ -256,6 +269,10 @@ export function Home() {
     const incomingTeamRequestRooms = items.filter((rId) =>
       isOpenTeamRequestRoom(mx.getRoom(rId), currentUserId)
     );
+    const teamRequestRooms = items.filter((rId) => {
+      const room = mx.getRoom(rId);
+      return isTeamRequestRoom(room) && !isOpenTeamRequestRoom(room, currentUserId);
+    });
     const pinnedTeamRooms = items.filter((rId) => isOwnedTeamRoom(mx.getRoom(rId), currentUserId));
     const pinnedCommunicationRooms = items.filter((rId) =>
       isOwnedTeamCommunicationRoom(mx.getRoom(rId), currentUserId)
@@ -264,15 +281,28 @@ export function Home() {
       const room = mx.getRoom(rId);
       return (
         !isOpenTeamRequestRoom(room, currentUserId) &&
+        !isTeamRequestRoom(room) &&
         !isOwnedTeamRoom(room, currentUserId) &&
-        !isOwnedTeamCommunicationRoom(room, currentUserId)
+        !isOwnedTeamCommunicationRoom(room, currentUserId) &&
+        !isWaitingPatientRoom(room)
+      );
+    });
+    const waitingPatientRooms = items.filter((rId) => {
+      const room = mx.getRoom(rId);
+      return (
+        !isOpenTeamRequestRoom(room, currentUserId) &&
+        !isOwnedTeamRoom(room, currentUserId) &&
+        !isOwnedTeamCommunicationRoom(room, currentUserId) &&
+        isWaitingPatientRoom(room)
       );
     });
     const sortedItems = [
       ...incomingTeamRequestRooms,
+      ...teamRequestRooms,
       ...pinnedTeamRooms,
       ...pinnedCommunicationRooms,
       ...otherRooms,
+      ...waitingPatientRooms,
     ];
 
     if (closedCategories.has(DEFAULT_CATEGORY_ID)) {
@@ -280,7 +310,9 @@ export function Home() {
         (rId) =>
           isOwnedTeamRoom(mx.getRoom(rId), currentUserId) ||
           isOwnedTeamCommunicationRoom(mx.getRoom(rId), currentUserId) ||
+          isTeamRequestRoom(mx.getRoom(rId)) ||
           isOpenTeamRequestRoom(mx.getRoom(rId), currentUserId) ||
+          isWaitingPatientRoom(mx.getRoom(rId)) ||
           roomToUnread.has(rId) ||
           rId === selectedRoomId
       );
