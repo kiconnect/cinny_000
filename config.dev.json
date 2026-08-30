@@ -1,7 +1,7 @@
 {
   "defaultHomeserver": 0,
   "homeserverList": ["dev.kiconnect.at"],
-  "allowCustomHomeservers": true,
+  "allowCustomHomeservers": false,
   "disableSSO": true,
   "hidePasswordLogin": true,
   "portalUrl": "https://devportal.kiconnect.at",

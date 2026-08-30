@@ -26,8 +26,12 @@ import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { useKiconnectLock } from '../../kiconnect/lock/LockProvider';
 import { TeamIdleMonitorProvider } from '../../kiconnect/idle/TeamIdleMonitor';
 
-const KIconnectLogo = '/kiconnect-app-icon-dev.png';
-const KIconnectFavicon = '/kiconnect-desktop-dev-48.png';
+const KIconnectLogo = __KICONNECT_DEV_DEPLOYMENT__
+  ? '/kiconnect-app-icon-dev.png'
+  : '/kiconnect-app-icon-v5.png';
+const KIconnectFavicon = __KICONNECT_DEV_DEPLOYMENT__
+  ? '/kiconnect-desktop-dev-48.png'
+  : '/kiconnect-desktop-v2-48.png';
 
 function isWindowsClient(): boolean {
   const uaData = navigator.userAgentData as { platform?: string } | undefined;

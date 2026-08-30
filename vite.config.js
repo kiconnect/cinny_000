@@ -11,6 +11,9 @@ import fs from 'fs';
 import path from 'path';
 import buildConfig from './build.config';
 
+const activeClientConfig = JSON.parse(fs.readFileSync('config.json', 'utf8'));
+const isDevDeployment = activeClientConfig.homeserverList?.includes('dev.kiconnect.at') === true;
+
 const copyFiles = {
   targets: [
     {
@@ -31,8 +34,9 @@ const copyFiles = {
       dest: '',
     },
     {
-      src: 'public/manifest.json',
+      src: isDevDeployment ? 'public/manifest.dev.json' : 'public/manifest.json',
       dest: '',
+      rename: 'manifest.json',
     },
     {
       src: 'public/kiconnect-logo.png',
@@ -50,10 +54,14 @@ const copyFiles = {
       src: 'public/kiconnect-apple-touch-v6-180.png',
       dest: '',
     },
-    {
-      src: 'public/kiconnect-*-dev*.png',
-      dest: '',
-    },
+    ...(isDevDeployment
+      ? [
+          {
+            src: 'public/kiconnect-*-dev*.png',
+            dest: '',
+          },
+        ]
+      : []),
     {
       src: 'public/kiconnect-favicon-v6*',
       dest: '',
@@ -114,6 +122,9 @@ export default defineConfig({
   appType: 'spa',
   publicDir: false,
   base: buildConfig.base,
+  define: {
+    __KICONNECT_DEV_DEPLOYMENT__: JSON.stringify(isDevDeployment),
+  },
   server: {
     port: 8088,
     host: true,
@@ -129,6 +140,15 @@ export default defineConfig({
     allowedHosts: ['devcinny.kiconnect.at'],
   },
   plugins: [
+    {
+      name: 'kiconnect-dev-branding',
+      transformIndexHtml(html) {
+        if (!isDevDeployment) return html;
+        return html
+          .replaceAll('kiconnect-desktop-v2-', 'kiconnect-desktop-dev-')
+          .replace('kiconnect-apple-touch-v6-180.png', 'kiconnect-apple-touch-dev-180.png');
+      },
+    },
     serverMatrixSdkCryptoWasm('/node_modules/.vite/deps/pkg/matrix_sdk_crypto_wasm_bg.wasm'),
     topLevelAwait({
       // The export name of top-level await promise for each chunk module
