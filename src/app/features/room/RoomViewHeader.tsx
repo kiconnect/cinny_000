@@ -229,16 +229,20 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(
             <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
               {changingPush && 'Benachrichtigungen …'}
               {!changingPush &&
-                (webPushConfigured
-                  ? `Push-Nachrichten: ${pushStatus === 'on' ? 'Ein' : 'Aus'}`
-                  : `Windows-Benachrichtigungen: ${
-                      localNotificationStatus === 'granted' ? 'Ein' : 'Aus'
-                    }`)}
+                `Benachrichtigungen: ${
+                  webPushConfigured
+                    ? pushStatus === 'on'
+                      ? 'Ein'
+                      : 'Aus'
+                    : localNotificationStatus === 'granted'
+                      ? 'Ein'
+                      : 'Aus'
+                }`}
             </Text>
           </MenuItem>
           {!webPushConfigured && localNotificationStatus === 'denied' && (
             <Text style={{ padding: `0 ${config.space.S200}` }} size="T200" priority="300">
-              Im Browser oder in Windows blockiert.
+              Im Browser oder auf diesem Gerät blockiert.
             </Text>
           )}
           {pushStatus === 'unsupported' && (
