@@ -26,8 +26,8 @@ import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { useKiconnectLock } from '../../kiconnect/lock/LockProvider';
 import { TeamIdleMonitorProvider } from '../../kiconnect/idle/TeamIdleMonitor';
 
-const KIconnectLogo = '/kiconnect-app-icon-v5.png';
-const KIconnectFavicon = '/kiconnect-desktop-v2-48.png';
+const KIconnectLogo = '/kiconnect-app-icon-dev.png';
+const KIconnectFavicon = '/kiconnect-desktop-dev-48.png';
 
 function isWindowsClient(): boolean {
   const uaData = navigator.userAgentData as { platform?: string } | undefined;

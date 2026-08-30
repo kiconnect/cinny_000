@@ -51,6 +51,10 @@ const copyFiles = {
       dest: '',
     },
     {
+      src: 'public/kiconnect-*-dev*.png',
+      dest: '',
+    },
+    {
       src: 'public/kiconnect-favicon-v6*',
       dest: '',
     },

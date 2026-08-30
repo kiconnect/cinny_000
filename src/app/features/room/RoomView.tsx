@@ -1,5 +1,15 @@
-import React, { useCallback, useRef, useState } from 'react';
-import { Box, Button, Text, config } from 'folds';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import FocusTrap from 'focus-trap-react';
+import {
+  Box,
+  Button,
+  Dialog,
+  Overlay,
+  OverlayBackdrop,
+  OverlayCenter,
+  Text,
+  config,
+} from 'folds';
 import { EventType } from 'matrix-js-sdk';
 import { ReactEditor } from 'slate-react';
 import { isKeyHotkey } from 'is-hotkey';
@@ -65,6 +75,10 @@ export function RoomView({ eventId }: { eventId?: string }) {
   const { roomId } = room;
   const editor = useEditor();
   const [sendingConsent, setSendingConsent] = useState(false);
+  const [sendingEmergencyReply, setSendingEmergencyReply] = useState(false);
+  const [emergencyReplySubmitted, setEmergencyReplySubmitted] = useState(false);
+  const [emergencyReplyError, setEmergencyReplyError] = useState<string>();
+  const emergencyReplyInFlightRef = useRef(false);
 
   const mx = useMatrixClient();
 
@@ -79,6 +93,45 @@ export function RoomView({ eventId }: { eventId?: string }) {
   const consentAccepted = ownConsent?.status === 'accepted';
   const consentBlocksInput = ownPatientRoom && !consentAccepted;
   const consentPending = ownConsent?.status === 'pending';
+  const emergencyDialogEventType = 'io.kiconnect.emergency_dialog';
+  const emergencyDialogEvent =
+    useStateEvent(room, emergencyDialogEventType as StateEvent) ??
+    room.currentState.getStateEvents(emergencyDialogEventType, '');
+  const emergencyDialogEventId = emergencyDialogEvent?.getId();
+  useEffect(() => {
+    emergencyReplyInFlightRef.current = false;
+    setEmergencyReplySubmitted(false);
+    setEmergencyReplyError(undefined);
+  }, [roomId, emergencyDialogEventId]);
+  const emergencyDialogPending =
+    ownPatientRoom &&
+    emergencyDialogEvent?.getContent()?.status === 'pending' &&
+    !emergencyReplySubmitted;
+
+  const sendEmergencyReply = async (isEmergency: boolean) => {
+    if (emergencyReplyInFlightRef.current) return;
+    emergencyReplyInFlightRef.current = true;
+    setSendingEmergencyReply(true);
+    setEmergencyReplySubmitted(true);
+    setEmergencyReplyError(undefined);
+    try {
+      await mx.sendEvent(roomId, 'm.room.message', {
+        msgtype: 'm.text',
+        body: isEmergency ? 'Notfall' : 'Kein medizinischer Notfall',
+        'io.kiconnect.emergency_response': {
+          value: isEmergency ? 'emergency' : 'notfall_no',
+        },
+      });
+    } catch (error) {
+      emergencyReplyInFlightRef.current = false;
+      setEmergencyReplySubmitted(false);
+      setEmergencyReplyError(
+        error instanceof Error ? error.message : 'Die Antwort konnte nicht gesendet werden.'
+      );
+    } finally {
+      setSendingEmergencyReply(false);
+    }
+  };
 
   const sendConsentReply = async (accepted: boolean) => {
     if (sendingConsent) return;
@@ -117,6 +170,67 @@ export function RoomView({ eventId }: { eventId?: string }) {
 
   return (
     <Page ref={roomViewRef}>
+      {emergencyDialogPending && (
+        <Overlay open backdrop={<OverlayBackdrop />}>
+          <OverlayCenter>
+            <FocusTrap
+              focusTrapOptions={{
+                escapeDeactivates: false,
+                clickOutsideDeactivates: false,
+                initialFocus: false,
+              }}
+            >
+              <Dialog
+                variant="Surface"
+                role="alertdialog"
+                aria-modal="true"
+                aria-labelledby="emergency-dialog-title"
+                style={{ width: 'min(440px, calc(100vw - 32px))' }}
+              >
+                <Box direction="Column" gap="400" style={{ padding: 24 }}>
+                  <Box direction="Column" gap="200">
+                    <Text id="emergency-dialog-title" size="H4">
+                      Medizinischer Notfall
+                    </Text>
+                    <Text>Handelt es sich um einen medizinischen Notfall?</Text>
+                  </Box>
+                  {emergencyReplyError && (
+                    <Text style={{ color: '#922536' }}>{emergencyReplyError}</Text>
+                  )}
+                  <Box gap="200" style={{ flexWrap: 'wrap' }}>
+                    <Button
+                      variant="Primary"
+                      onClick={() => sendEmergencyReply(false)}
+                      disabled={sendingEmergencyReply}
+                      style={{
+                        flex: '1 1 160px',
+                        backgroundColor: '#1e7f93',
+                        borderColor: '#1e7f93',
+                        color: '#ffffff',
+                      }}
+                    >
+                      Nein
+                    </Button>
+                    <Button
+                      variant="Critical"
+                      onClick={() => sendEmergencyReply(true)}
+                      disabled={sendingEmergencyReply}
+                      style={{
+                        flex: '1 1 160px',
+                        backgroundColor: '#c62828',
+                        borderColor: '#c62828',
+                        color: '#ffffff',
+                      }}
+                    >
+                      Ja
+                    </Button>
+                  </Box>
+                </Box>
+              </Dialog>
+            </FocusTrap>
+          </OverlayCenter>
+        </Overlay>
+      )}
       <Box grow="Yes" direction="Column">
         <RoomTimeline
           key={roomId}

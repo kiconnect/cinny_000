@@ -1,6 +1,8 @@
 /// <reference lib="WebWorker" />
 
 import { cleanupOutdatedCaches, precacheAndRoute } from 'workbox-precaching';
+import { registerRoute } from 'workbox-routing';
+import { NetworkFirst } from 'workbox-strategies';
 
 export type {};
 declare const self: ServiceWorkerGlobalScope & {
@@ -8,6 +10,13 @@ declare const self: ServiceWorkerGlobalScope & {
 };
 
 cleanupOutdatedCaches();
+registerRoute(
+  ({ request }) => request.mode === 'navigate',
+  new NetworkFirst({
+    cacheName: 'kiconnect-navigation-v2',
+    networkTimeoutSeconds: 5,
+  })
+);
 precacheAndRoute(self.__WB_MANIFEST);
 
 type SessionInfo = {

@@ -44,7 +44,24 @@ if ('serviceWorker' in navigator) {
     pushSessionToSW(session?.baseUrl, session?.accessToken);
   };
 
-  navigator.serviceWorker.register(swUrl).then(sendSessionToSW);
+  let reloadingForServiceWorker = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (reloadingForServiceWorker) return;
+    reloadingForServiceWorker = true;
+    window.location.reload();
+  });
+
+  navigator.serviceWorker
+    .register(swUrl, { updateViaCache: 'none' })
+    .then(async (registration) => {
+      sendSessionToSW();
+      await registration.update();
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          registration.update().catch(() => undefined);
+        }
+      });
+    });
   navigator.serviceWorker.ready.then(sendSessionToSW);
 
   navigator.serviceWorker.addEventListener('message', (ev) => {

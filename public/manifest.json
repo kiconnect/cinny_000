@@ -13,25 +13,25 @@
   "theme_color": "#1E7F93",
   "icons": [
     {
-      "src": "/kiconnect-desktop-v2-192.png",
+      "src": "/kiconnect-desktop-dev-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/kiconnect-desktop-v2-512.png",
+      "src": "/kiconnect-desktop-dev-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/kiconnect-maskable-v2-192.png",
+      "src": "/kiconnect-maskable-dev-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "maskable"
     },
     {
-      "src": "/kiconnect-maskable-v2-512.png",
+      "src": "/kiconnect-maskable-dev-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"

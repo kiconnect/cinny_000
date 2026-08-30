@@ -5,8 +5,8 @@ import { roomToParentsAtom } from '../../../state/room/roomToParents';
 import { allRoomsAtom } from '../../../state/room-list/roomList';
 import { useOrphanRooms } from '../../../state/hooks/roomList';
 import {
-  isOwnedTeamCommunicationRoom,
   isOwnedTeamRoom,
+  isTeamCommunicationRoom,
   isTeamRequestRoom,
 } from '../../../kiconnect/logic/roomState';
 
@@ -21,10 +21,11 @@ export const useHomeRooms = () => {
     const room = mx.getRoom(roomId);
     return (
       isOwnedTeamRoom(room, currentUserId) ||
-      isOwnedTeamCommunicationRoom(room, currentUserId) ||
       isTeamRequestRoom(room)
     );
   });
 
-  return Array.from(new Set([...pinnedRooms, ...rooms]));
+  return Array.from(new Set([...pinnedRooms, ...rooms])).filter(
+    (roomId) => !isTeamCommunicationRoom(mx.getRoom(roomId))
+  );
 };
