@@ -118,6 +118,7 @@ import { useRoomCreatorsTag } from '../../hooks/useRoomCreatorsTag';
 import { usePowerLevelTags } from '../../hooks/usePowerLevelTags';
 import { useComposingCheck } from '../../hooks/useComposingCheck';
 import { KiconnectRoomActions } from '../../kiconnect/components/RoomActions';
+import { KipaVoiceMount } from '../../kiconnect/kipa-voice/KipaVoiceMount';
 
 interface RoomInputProps {
   editor: Editor;
@@ -694,6 +695,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                 </div>
               )}
               <KiconnectRoomActions room={room} />
+              <KipaVoiceMount room={room} />
             </>
           }
 

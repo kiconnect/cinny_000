@@ -10,3 +10,6 @@ devAssets
 
 .DS_Store
 .idea
+
+# Local firewall administration credentials must never be committed.
+opnsense.env

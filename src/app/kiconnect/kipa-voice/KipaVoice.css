@@ -1,0 +1,23 @@
+.kipa-voice-panel {
+  padding: 0 12px 10px;
+}
+
+.kipa-voice-panel__divider {
+  height: 1px;
+  margin-bottom: 8px;
+  background: var(--bg-surface-border);
+}
+
+.kipa-voice-panel__error {
+  color: #c62828;
+}
+
+.kipa-voice-panel audio:not([controls]) {
+  display: none;
+}
+
+.kipa-voice-panel audio[controls] {
+  width: 100%;
+  height: 32px;
+  margin-top: 8px;
+}
