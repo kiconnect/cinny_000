@@ -3,10 +3,11 @@ Cinny Produktiv-Deployment
 
 Wichtig:
 - Auf dem Produktivserver wird Cinny nicht mit npm start betrieben.
-- Produktiv wird der statische Build aus dist/ ausgeliefert.
-- Die richtige Produktiv-Konfiguration wird automatisch durch npm run build:prod gesetzt.
+- Produktiv wird der statische Build aus dist-prod/ ausgeliefert.
+- Alle Produktivwerte stehen ausschliesslich in der lokalen, nicht versionierten
+  Datei .env.local mit KICONNECT_ENV=prod.
 - Cinny ist eine Browser-Webanwendung. Matrix, Keycloak und Bots laufen nicht im
-  Cinny-Prozess. Ein Webserver muss lediglich die statischen Dateien aus dist/
+  Cinny-Prozess. Ein Webserver muss lediglich die statischen Dateien aus dist-prod/
   inklusive SPA-Fallback auf index.html ausliefern.
 
 Ablauf am Produktivserver
@@ -24,17 +25,22 @@ Ablauf am Produktivserver
 
    npm ci
 
-4. Produktiv-Build erstellen:
+4. Lokale .env.local anhand von .env.example anlegen beziehungsweise pruefen.
+   Keine Client-Secrets oder Zugangstokens eintragen.
 
-   npm run build:prod
+5. Produktiv-Build erstellen:
+
+   npm run build
 
 Dieser Befehl macht automatisch:
-- config.prod.json wird nach config.json kopiert.
-- vite build wird ausgefuehrt.
-- dist/config.json enthaelt danach die Produktivwerte.
+- die lokale ENV-Kombination wird vollstaendig validiert;
+- Vite wird nur bei einem konsistenten Prod-Profil gestartet;
+- dist-prod/config.json und dist-prod/manifest.json werden erzeugt.
 
-Produktivwerte, die nach dem Build in dist/config.json stehen muessen:
+Produktivwerte, die nach dem Build in dist-prod/config.json stehen muessen:
 
+   deployment: prod
+   expectedHostname: cinny.kiconnect.at
    homeserverList: kiconnect.at
    hidePasswordLogin: true
    keycloakLogout.issuer: https://sso.id-am.at/realms/KIconnect
@@ -46,17 +52,20 @@ Produktivwerte, die nach dem Build in dist/config.json stehen muessen:
 
 Kontrolle nach dem Build:
 
-   cat dist/config.json
+   cat dist-prod/config.json
+
+Zusaetzlich darf der Prod-Build keine Dev-Branding-Dateien oder -Verweise
+enthalten.
 
 Nicht verwenden auf Produktiv:
 
    npm start
-   npm run build
    npm run build:dev
 
 Fuer Produktiv immer:
 
-   npm run build:prod
+   KICONNECT_ENV=prod in der lokalen .env.local
+   npm run build
 
 Keycloak-Check am Produktivsystem
 ---------------------------------
@@ -249,10 +258,10 @@ Ausschalten werden der Pusher und die lokale Browser-Subscription entfernt.
 Ein vollstaendiger Logout entfernt sie ebenfalls. Der Gateway versendet nur den
 neutralen Text "Neue Nachricht in KI-Connect" und keine Patientendaten.
 
-Dev-Konfiguration in config.dev.json/config.json:
+Dev-Konfiguration in der lokalen Cinny-.env.local:
 
-   webPush.gatewayUrl: https://devpush.kiconnect.at
-   webPush.vapidPublicKey: <oeffentlicher Dev-VAPID-Schluessel>
+   KICONNECT_WEB_PUSH_GATEWAY_URL=https://devpush.kiconnect.at
+   KICONNECT_WEB_PUSH_VAPID_PUBLIC_KEY=<oeffentlicher Dev-VAPID-Schluessel>
 
 Fuer Dev sind zusaetzlich erforderlich:
 
@@ -280,10 +289,11 @@ Produktion braucht ein eigenes VAPID-Schluesselpaar. Im Portal-Repository:
    python3 push_gateway/generate_vapid_keys.py
 
 Den privaten Schluessel und die Absenderadresse nur in .env.push speichern. Den
-ausgegebenen oeffentlichen Schluessel in config.prod.json unter
-webPush.vapidPublicKey eintragen und als gatewayUrl beispielsweise
-https://push.kiconnect.at verwenden. Danach DNS, Caddy-Reverse-Proxy auf Port
-8091, Gateway-Container und Cinny mit npm run build:prod ausrollen.
+ausgegebenen oeffentlichen Schluessel ausschliesslich in der lokalen Cinny-Datei
+.env.local als KICONNECT_WEB_PUSH_VAPID_PUBLIC_KEY eintragen und als
+KICONNECT_WEB_PUSH_GATEWAY_URL beispielsweise https://push.kiconnect.at
+verwenden. Danach DNS, Caddy-Reverse-Proxy auf Port 8091, Gateway-Container und
+Cinny mit npm run build ausrollen.
 
 Auf iPhone/iPad funktioniert Web-Push nur in der zum Home-Bildschirm
 hinzugefuegten PWA. Die Freigabe muss durch den Benutzer ueber den Schalter
