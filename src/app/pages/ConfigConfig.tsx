@@ -16,7 +16,7 @@ export function ConfigConfigLoading() {
 type ConfigConfigErrorProps = {
   error: unknown;
   retry: () => void;
-  ignore: () => void;
+  ignore?: () => void;
 };
 export function ConfigConfigError({ error, retry, ignore }: ConfigConfigErrorProps) {
   return (
@@ -40,11 +40,13 @@ export function ConfigConfigError({ error, retry, ignore }: ConfigConfigErrorPro
                 Retry
               </Text>
             </Button>
-            <Button variant="Critical" onClick={ignore} fill="Soft">
-              <Text as="span" size="B400">
-                Continue
-              </Text>
-            </Button>
+            {ignore && (
+              <Button variant="Critical" onClick={ignore} fill="Soft">
+                <Text as="span" size="B400">
+                  Continue
+                </Text>
+              </Button>
+            )}
           </Box>
         </Dialog>
       </Box>

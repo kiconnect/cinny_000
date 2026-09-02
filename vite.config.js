@@ -10,9 +10,10 @@ import { VitePWA } from 'vite-plugin-pwa';
 import fs from 'fs';
 import path from 'path';
 import buildConfig from './build.config';
+import { deploymentFromEnv } from './scripts/kiconnect-deployment';
 
-const activeClientConfig = JSON.parse(fs.readFileSync('config.json', 'utf8'));
-const isDevDeployment = activeClientConfig.homeserverList?.includes('dev.kiconnect.at') === true;
+const deployment = deploymentFromEnv(process.env);
+const isDevDeployment = deployment.isDev;
 
 const copyFiles = {
   targets: [
@@ -28,15 +29,6 @@ const copyFiles = {
     {
       src: 'netlify.toml',
       dest: '',
-    },
-    {
-      src: 'config.json',
-      dest: '',
-    },
-    {
-      src: isDevDeployment ? 'public/manifest.dev.json' : 'public/manifest.json',
-      dest: '',
-      rename: 'manifest.json',
     },
     {
       src: 'public/kiconnect-logo.png',
@@ -89,6 +81,47 @@ const copyFiles = {
   ],
 };
 
+function deploymentAssetsPlugin() {
+  const assets = {
+    '/config.json': {
+      contentType: 'application/json; charset=utf-8',
+      source: `${JSON.stringify(deployment.clientConfig, null, 2)}\n`,
+    },
+    '/manifest.json': {
+      contentType: 'application/manifest+json; charset=utf-8',
+      source: `${JSON.stringify(deployment.manifest, null, 2)}\n`,
+    },
+  };
+
+  const serveAssets = (server) => {
+    server.middlewares.use((req, res, next) => {
+      const asset = assets[String(req.url || '').split('?')[0]];
+      if (!asset) {
+        next();
+        return;
+      }
+      res.statusCode = 200;
+      res.setHeader('Content-Type', asset.contentType);
+      res.setHeader('Cache-Control', 'no-store');
+      res.end(asset.source);
+    });
+  };
+
+  return {
+    name: 'kiconnect-deployment-assets',
+    configureServer: serveAssets,
+    generateBundle() {
+      Object.entries(assets).forEach(([fileName, asset]) => {
+        this.emitFile({
+          type: 'asset',
+          fileName: fileName.slice(1),
+          source: asset.source,
+        });
+      });
+    },
+  };
+}
+
 function serverMatrixSdkCryptoWasm(wasmFilePath) {
   return {
     name: 'vite-plugin-serve-matrix-sdk-crypto-wasm',
@@ -128,7 +161,7 @@ export default defineConfig({
   server: {
     port: 8088,
     host: true,
-    allowedHosts: ['test.kiconnect.at', 'devcinny.kiconnect.at'],
+    allowedHosts: ['test.kiconnect.at', deployment.hostname],
     fs: {
       // Allow serving files from one level up to the project root
       allow: ['..'],
@@ -137,9 +170,10 @@ export default defineConfig({
   preview: {
     host: true,
     port: 8001,
-    allowedHosts: ['devcinny.kiconnect.at'],
+    allowedHosts: [deployment.hostname],
   },
   plugins: [
+    deploymentAssetsPlugin(),
     {
       name: 'kiconnect-dev-branding',
       transformIndexHtml(html) {
@@ -192,7 +226,7 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: 'dist',
+    outDir: deployment.outDir,
     sourcemap: true,
     copyPublicDir: false,
     rollupOptions: {

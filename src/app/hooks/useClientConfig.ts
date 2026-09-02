@@ -6,6 +6,8 @@ export type HashRouterConfig = {
 };
 
 export type ClientConfig = {
+  deployment?: 'dev' | 'prod';
+  expectedHostname?: string;
   defaultHomeserver?: number;
   homeserverList?: string[];
   allowCustomHomeservers?: boolean;

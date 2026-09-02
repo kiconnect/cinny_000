@@ -40,11 +40,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
-    <link
-      rel="apple-touch-icon"
-      sizes="180x180"
-      href="/kiconnect-apple-touch-v6-180.png"
-    />
+    <link rel="apple-touch-icon" sizes="180x180" href="/kiconnect-apple-touch-v6-180.png" />
   </head>
   <body id="appBody">
     <script>
@@ -157,6 +153,14 @@
           const response = await fetch('/config.json', { cache: 'no-store' });
           if (!response.ok) throw new Error('Konfiguration konnte nicht geladen werden.');
           const config = await response.json();
+          const expectedHostname = String(config.expectedHostname || '').toLowerCase();
+          const actualHostname = location.hostname.toLowerCase();
+          const loopback = ['localhost', '127.0.0.1', '::1'].includes(actualHostname);
+          if (expectedHostname && actualHostname !== expectedHostname && !loopback) {
+            throw new Error(
+              `Falscher KIconnect-Build für ${actualHostname}; erwartet wird ${expectedHostname}.`
+            );
+          }
           const unlock = config.keycloakUnlock;
           if (!unlock?.issuer || !unlock.clientId) {
             throw new Error('Passkey-Entsperrung ist nicht konfiguriert.');
