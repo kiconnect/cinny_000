@@ -33,6 +33,7 @@ import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { useRoomCreators } from '../../hooks/useRoomCreators';
 import { useRoom } from '../../hooks/useRoom';
 import { getRoomOwner, isPatientRoom } from '../../kiconnect/logic/roomState';
+import { readAccountType } from '../../kiconnect/logic/accountType';
 
 const FN_KEYS_REGEX = /^F\d+$/;
 const shouldFocusMessageField = (evt: KeyboardEvent): boolean => {
@@ -88,6 +89,10 @@ export function RoomView({ eventId }: { eventId?: string }) {
     'io.kiconnect.consent.current' as StateEvent
   );
   const ownPatientRoom = isPatientRoom(room) && getRoomOwner(room) === mx.getUserId();
+  const currentUserId = mx.getUserId();
+  const accountType = currentUserId ? readAccountType(currentUserId) : 'unknown';
+  const isTeamAccount = accountType === 'team' || currentUserId?.startsWith('@z') || currentUserId?.startsWith('@bot');
+  const patientCanAnswerEmergency = ownPatientRoom || (isPatientRoom(room) && !isTeamAccount);
   const consentContent = consentEvent?.getContent();
   const ownConsent = consentContent?.matrix_user_id === mx.getUserId() ? consentContent : undefined;
   const consentAccepted = ownConsent?.status === 'accepted';
@@ -104,7 +109,7 @@ export function RoomView({ eventId }: { eventId?: string }) {
     setEmergencyReplyError(undefined);
   }, [roomId, emergencyDialogEventId]);
   const emergencyDialogPending =
-    ownPatientRoom &&
+    patientCanAnswerEmergency &&
     emergencyDialogEvent?.getContent()?.status === 'pending' &&
     !emergencyReplySubmitted;
 
