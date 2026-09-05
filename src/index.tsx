@@ -35,9 +35,9 @@ document.addEventListener('visibilitychange', () => {
 // Register Service Worker
 if ('serviceWorker' in navigator) {
   const swUrl =
-    import.meta.env.MODE === 'production'
-      ? `${trimTrailingSlash(import.meta.env.BASE_URL)}/sw.js`
-      : `/dev-sw.js?dev-sw`;
+    import.meta.env.DEV
+      ? `/dev-sw.js?dev-sw`
+      : `${trimTrailingSlash(import.meta.env.BASE_URL)}/sw.js`;
 
   const sendSessionToSW = () => {
     const session = getFallbackSession();
