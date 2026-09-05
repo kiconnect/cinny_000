@@ -23,6 +23,7 @@ import { RoomTimeline } from './RoomTimeline';
 import { RoomViewTyping } from './RoomViewTyping';
 import { RoomTombstone } from './RoomTombstone';
 import { RoomInput } from './RoomInput';
+import { MedicationDialogView } from './MedicationDialog';
 import { RoomViewFollowing, RoomViewFollowingPlaceholder } from './RoomViewFollowing';
 import { Page } from '../../components/page';
 import { useKeyDown } from '../../hooks/useKeyDown';
@@ -98,6 +99,9 @@ export function RoomView({ eventId }: { eventId?: string }) {
     useStateEvent(room, emergencyDialogEventType as StateEvent) ??
     room.currentState.getStateEvents(emergencyDialogEventType, '');
   const emergencyDialogEventId = emergencyDialogEvent?.getId();
+  const intakeDialogContent = emergencyDialogEvent?.getContent?.() ?? {};
+  const intakeDialogStage =
+    intakeDialogContent.stage === 'request_type' ? 'request_type' : 'emergency';
   useEffect(() => {
     emergencyReplyInFlightRef.current = false;
     setEmergencyReplySubmitted(false);
@@ -127,6 +131,32 @@ export function RoomView({ eventId }: { eventId?: string }) {
       setEmergencyReplySubmitted(false);
       setEmergencyReplyError(
         error instanceof Error ? error.message : 'Die Antwort konnte nicht gesendet werden.'
+      );
+    } finally {
+      setSendingEmergencyReply(false);
+    }
+  };
+
+  const sendRequestTypeReply = async (requestType: 'prescription' | 'other') => {
+    if (emergencyReplyInFlightRef.current) return;
+    emergencyReplyInFlightRef.current = true;
+    setSendingEmergencyReply(true);
+    setEmergencyReplySubmitted(true);
+    setEmergencyReplyError(undefined);
+    try {
+      await mx.sendEvent(roomId, 'm.room.message', {
+        msgtype: 'm.text',
+        body:
+          requestType === 'prescription'
+            ? 'Rezept / Medikamente nachbestellen'
+            : 'Anderes Anliegen',
+        'io.kiconnect.request_type_response': { value: requestType },
+      });
+    } catch (error) {
+      emergencyReplyInFlightRef.current = false;
+      setEmergencyReplySubmitted(false);
+      setEmergencyReplyError(
+        error instanceof Error ? error.message : 'Die Auswahl konnte nicht gesendet werden.'
       );
     } finally {
       setSendingEmergencyReply(false);
@@ -170,6 +200,7 @@ export function RoomView({ eventId }: { eventId?: string }) {
 
   return (
     <Page ref={roomViewRef}>
+      <MedicationDialogView room={room} />
       {emergencyDialogPending && (
         <Overlay open backdrop={<OverlayBackdrop />}>
           <OverlayCenter>
@@ -182,49 +213,102 @@ export function RoomView({ eventId }: { eventId?: string }) {
             >
               <Dialog
                 variant="Surface"
-                role="alertdialog"
+                role={intakeDialogStage === 'emergency' ? 'alertdialog' : 'dialog'}
                 aria-modal="true"
-                aria-labelledby="emergency-dialog-title"
+                aria-labelledby="intake-dialog-title"
                 style={{ width: 'min(440px, calc(100vw - 32px))' }}
               >
                 <Box direction="Column" gap="400" style={{ padding: 24 }}>
-                  <Box direction="Column" gap="200">
-                    <Text id="emergency-dialog-title" size="H4">
-                      Medizinischer Notfall
-                    </Text>
-                    <Text>Handelt es sich um einen medizinischen Notfall?</Text>
-                  </Box>
-                  {emergencyReplyError && (
-                    <Text style={{ color: '#922536' }}>{emergencyReplyError}</Text>
+                  {intakeDialogStage === 'request_type' ? (
+                    <>
+                      <Box direction="Column" gap="200">
+                        <Text id="intake-dialog-title" size="H4">
+                          Ich brauche:
+                        </Text>
+                        <Text>Bitte wählen Sie aus, worum es geht.</Text>
+                      </Box>
+                      {emergencyReplyError && (
+                        <Text style={{ color: '#922536' }}>{emergencyReplyError}</Text>
+                      )}
+                      <Box direction="Column" gap="200">
+                        <Button
+                          variant="Secondary"
+                          onClick={() => sendRequestTypeReply('prescription')}
+                          disabled={sendingEmergencyReply}
+                          style={{
+                            width: '100%',
+                            minHeight: 58,
+                            backgroundColor: '#ffffff',
+                            border: '2px solid #1e7f93',
+                            color: '#111111',
+                            whiteSpace: 'normal',
+                          }}
+                        >
+                          Rezept / Medikamente nachbestellen
+                        </Button>
+                        <Button
+                          variant="Secondary"
+                          onClick={() => sendRequestTypeReply('other')}
+                          disabled={sendingEmergencyReply}
+                          style={{
+                            width: '100%',
+                            minHeight: 78,
+                            backgroundColor: '#ffffff',
+                            border: '2px solid #1e7f93',
+                            color: '#111111',
+                            whiteSpace: 'normal',
+                            lineHeight: 1.35,
+                          }}
+                        >
+                          Anderes Anliegen
+                          <br />
+                          <small>
+                            Termin, medizinisches Problem, Überweisung, Arztkonsultation im Chat …
+                          </small>
+                        </Button>
+                      </Box>
+                    </>
+                  ) : (
+                    <>
+                      <Box direction="Column" gap="200">
+                        <Text id="intake-dialog-title" size="H4">
+                          Medizinischer Notfall
+                        </Text>
+                        <Text>Handelt es sich um einen medizinischen Notfall?</Text>
+                      </Box>
+                      {emergencyReplyError && (
+                        <Text style={{ color: '#922536' }}>{emergencyReplyError}</Text>
+                      )}
+                      <Box gap="200" style={{ flexWrap: 'wrap' }}>
+                        <Button
+                          variant="Primary"
+                          onClick={() => sendEmergencyReply(false)}
+                          disabled={sendingEmergencyReply}
+                          style={{
+                            flex: '1 1 160px',
+                            backgroundColor: '#1e7f93',
+                            borderColor: '#1e7f93',
+                            color: '#ffffff',
+                          }}
+                        >
+                          Nein
+                        </Button>
+                        <Button
+                          variant="Critical"
+                          onClick={() => sendEmergencyReply(true)}
+                          disabled={sendingEmergencyReply}
+                          style={{
+                            flex: '1 1 160px',
+                            backgroundColor: '#c62828',
+                            borderColor: '#c62828',
+                            color: '#ffffff',
+                          }}
+                        >
+                          Ja
+                        </Button>
+                      </Box>
+                    </>
                   )}
-                  <Box gap="200" style={{ flexWrap: 'wrap' }}>
-                    <Button
-                      variant="Primary"
-                      onClick={() => sendEmergencyReply(false)}
-                      disabled={sendingEmergencyReply}
-                      style={{
-                        flex: '1 1 160px',
-                        backgroundColor: '#1e7f93',
-                        borderColor: '#1e7f93',
-                        color: '#ffffff',
-                      }}
-                    >
-                      Nein
-                    </Button>
-                    <Button
-                      variant="Critical"
-                      onClick={() => sendEmergencyReply(true)}
-                      disabled={sendingEmergencyReply}
-                      style={{
-                        flex: '1 1 160px',
-                        backgroundColor: '#c62828',
-                        borderColor: '#c62828',
-                        color: '#ffffff',
-                      }}
-                    >
-                      Ja
-                    </Button>
-                  </Box>
                 </Box>
               </Dialog>
             </FocusTrap>
