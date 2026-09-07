@@ -44,10 +44,18 @@ type MedicationItem = {
   request_count?: number;
 };
 
+type MedicationBeneficiary = {
+  medication_for?: 'self' | 'relative' | 'unclear' | string;
+  relative_relation?: string;
+  relative_first_name?: string;
+  relative_last_name?: string;
+  relative_social_insurance_number?: string;
+};
+
 type MedicationDialogContent = {
   protocol?: number;
   status?: string;
-  stage?: 'method' | 'selection';
+  stage?: 'beneficiary' | 'relative_details' | 'method' | 'selection';
   session_id?: string;
   initial_query?: string;
   query?: string;
@@ -55,6 +63,7 @@ type MedicationDialogContent = {
   selected?: MedicationItem[];
   previous?: MedicationItem[];
   hidden_previous?: MedicationItem[];
+  beneficiary?: MedicationBeneficiary;
   error?: string;
 };
 
@@ -79,6 +88,9 @@ export function MedicationDialogView({ room }: MedicationDialogProps) {
   const [localError, setLocalError] = useState<string>();
   const [notice, setNotice] = useState<string>();
   const [confirmRemoveId, setConfirmRemoveId] = useState<string>();
+  const [relativeFirstName, setRelativeFirstName] = useState('');
+  const [relativeLastName, setRelativeLastName] = useState('');
+  const [relativeSvnr, setRelativeSvnr] = useState('');
   const lastSentQuery = useRef('');
   const pending =
     !locallySubmitted &&
@@ -95,7 +107,10 @@ export function MedicationDialogView({ room }: MedicationDialogProps) {
     setLocalError(undefined);
     setNotice(undefined);
     setConfirmRemoveId(undefined);
-  }, [room.roomId, sessionId, dialogEventId]);
+    setRelativeFirstName(content.beneficiary?.relative_first_name ?? '');
+    setRelativeLastName(content.beneficiary?.relative_last_name ?? '');
+    setRelativeSvnr(content.beneficiary?.relative_social_insurance_number ?? '');
+  }, [room.roomId, sessionId, dialogEventId, content.beneficiary]);
 
   useEffect(() => {
     setActiveList('previous');
@@ -341,6 +356,18 @@ export function MedicationDialogView({ room }: MedicationDialogProps) {
     }
   };
 
+  const chooseBeneficiary = async (medicationFor: 'self' | 'relative') => {
+    await sendAction('set_beneficiary', { medication_for: medicationFor });
+  };
+
+  const submitRelativeDetails = async () => {
+    await sendAction('set_relative_details', {
+      first_name: relativeFirstName,
+      last_name: relativeLastName,
+      social_insurance_number: relativeSvnr,
+    });
+  };
+
   const chooseInputMethod = async (method: 'photo' | 'report' | 'list') => {
     if (method !== 'list') setLocallySubmitted(true);
     if (!(await sendAction('choose_method', { method })) && method !== 'list') {
@@ -360,6 +387,214 @@ export function MedicationDialogView({ room }: MedicationDialogProps) {
   }, [pending, query, sessionId]);
 
   if (!pending) return null;
+
+  const baseDialogStyle = {
+    width: 'min(560px, calc(100vw - 24px))',
+    maxHeight: 'calc(100dvh - 24px)',
+    overflowY: 'auto' as const,
+    backgroundColor: '#ffffff',
+    color: '#111111',
+  };
+
+  const formButtonStyle = {
+    width: '100%',
+    minHeight: 56,
+    justifyContent: 'flex-start',
+    whiteSpace: 'normal' as const,
+    textAlign: 'left' as const,
+    padding: '12px 16px',
+    backgroundColor: '#ffffff',
+    color: '#111111',
+    border: '2px solid #1e7f93',
+    borderRadius: 10,
+  };
+
+  const textInputStyle = {
+    width: '100%',
+    minHeight: 44,
+    border: '2px solid rgba(127, 127, 127, 0.55)',
+    borderRadius: 8,
+    padding: '8px 12px',
+    font: 'inherit',
+    background: '#ffffff',
+    color: '#111111',
+    boxSizing: 'border-box' as const,
+  };
+
+  if (content.stage === 'beneficiary') {
+    return (
+      <Overlay open backdrop={<OverlayBackdrop />}>
+        <OverlayCenter>
+          <FocusTrap
+            focusTrapOptions={{
+              escapeDeactivates: false,
+              clickOutsideDeactivates: false,
+              initialFocus: false,
+            }}
+          >
+            <Dialog
+              variant="Surface"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="medication-beneficiary-dialog-title"
+              style={baseDialogStyle}
+            >
+              <Box
+                direction="Column"
+                gap="300"
+                style={{ padding: 20, backgroundColor: '#ffffff', color: '#111111' }}
+              >
+                <Box direction="Column" gap="100">
+                  <Text id="medication-beneficiary-dialog-title" size="H4">
+                    Für wen ist das Rezept?
+                  </Text>
+                  <Text>Bitte wählen Sie aus, für wen die Medikamente benötigt werden.</Text>
+                </Box>
+                <Button
+                  variant="Secondary"
+                  disabled={sending}
+                  onClick={() => void chooseBeneficiary('self')}
+                  style={formButtonStyle}
+                >
+                  Für mich selbst
+                </Button>
+                <Button
+                  variant="Secondary"
+                  disabled={sending}
+                  onClick={() => void chooseBeneficiary('relative')}
+                  style={formButtonStyle}
+                >
+                  Für eine angehörige Person
+                </Button>
+                {(localError || content.error) && (
+                  <Text style={{ color: '#922536' }}>{localError ?? content.error}</Text>
+                )}
+                <Button
+                  variant="Secondary"
+                  disabled={sending}
+                  onClick={() => sendAction('cancel')}
+                  style={{
+                    width: '100%',
+                    minHeight: 48,
+                    backgroundColor: '#ffffff',
+                    color: '#111111',
+                    border: '2px solid #6f6f6f',
+                    borderRadius: 8,
+                  }}
+                >
+                  Abbrechen
+                </Button>
+              </Box>
+            </Dialog>
+          </FocusTrap>
+        </OverlayCenter>
+      </Overlay>
+    );
+  }
+
+  if (content.stage === 'relative_details') {
+    const svnrValid = relativeSvnr.replace(/\D/g, '').length === 10;
+    return (
+      <Overlay open backdrop={<OverlayBackdrop />}>
+        <OverlayCenter>
+          <FocusTrap
+            focusTrapOptions={{
+              escapeDeactivates: false,
+              clickOutsideDeactivates: false,
+              initialFocus: false,
+            }}
+          >
+            <Dialog
+              variant="Surface"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="medication-relative-dialog-title"
+              style={baseDialogStyle}
+            >
+              <Box
+                direction="Column"
+                gap="300"
+                style={{ padding: 20, backgroundColor: '#ffffff', color: '#111111' }}
+              >
+                <Box direction="Column" gap="100">
+                  <Text id="medication-relative-dialog-title" size="H4">
+                    Daten der Person
+                  </Text>
+                  <Text>
+                    Bitte geben Sie die Daten der Person ein, für die das Rezept benötigt wird.
+                  </Text>
+                </Box>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <Text>Vorname</Text>
+                  <input
+                    value={relativeFirstName}
+                    onChange={(evt) => setRelativeFirstName(evt.currentTarget.value)}
+                    autoComplete="given-name"
+                    style={textInputStyle}
+                  />
+                </label>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <Text>Familienname</Text>
+                  <input
+                    value={relativeLastName}
+                    onChange={(evt) => setRelativeLastName(evt.currentTarget.value)}
+                    autoComplete="family-name"
+                    style={textInputStyle}
+                  />
+                </label>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <Text>SV-Nummer</Text>
+                  <input
+                    value={relativeSvnr}
+                    onChange={(evt) => setRelativeSvnr(evt.currentTarget.value)}
+                    inputMode="numeric"
+                    autoComplete="off"
+                    placeholder="10-stellig"
+                    style={textInputStyle}
+                  />
+                </label>
+                {(localError || content.error) && (
+                  <Text style={{ color: '#922536' }}>{localError ?? content.error}</Text>
+                )}
+                <Button
+                  variant="Primary"
+                  disabled={
+                    sending || !relativeFirstName.trim() || !relativeLastName.trim() || !svnrValid
+                  }
+                  onClick={() => void submitRelativeDetails()}
+                  style={{
+                    width: '100%',
+                    minHeight: 48,
+                    backgroundColor: '#ffffff',
+                    border: '2px solid #1e7f93',
+                    borderRadius: 8,
+                    color: '#111111',
+                  }}
+                >
+                  Weiter
+                </Button>
+                <Button
+                  variant="Secondary"
+                  disabled={sending}
+                  onClick={() => sendAction('cancel')}
+                  style={{
+                    width: '100%',
+                    minHeight: 48,
+                    backgroundColor: '#ffffff',
+                    color: '#111111',
+                    border: '2px solid #6f6f6f',
+                    borderRadius: 8,
+                  }}
+                >
+                  Abbrechen
+                </Button>
+              </Box>
+            </Dialog>
+          </FocusTrap>
+        </OverlayCenter>
+      </Overlay>
+    );
+  }
 
   if (content.stage !== 'selection') {
     const methodButtonStyle = {
@@ -411,13 +646,7 @@ export function MedicationDialogView({ room }: MedicationDialogProps) {
               role="dialog"
               aria-modal="true"
               aria-labelledby="medication-method-dialog-title"
-              style={{
-                width: 'min(560px, calc(100vw - 24px))',
-                maxHeight: 'calc(100dvh - 24px)',
-                overflowY: 'auto',
-                backgroundColor: '#ffffff',
-                color: '#111111',
-              }}
+              style={baseDialogStyle}
             >
               <Box
                 direction="Column"
