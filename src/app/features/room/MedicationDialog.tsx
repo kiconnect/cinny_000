@@ -10,10 +10,36 @@ import { getRoomOwner, isPatientRoom } from '../../kiconnect/logic/roomState';
 const DIALOG_EVENT = 'io.kiconnect.medication_dialog';
 const ACTION_EVENT = 'io.kiconnect.medication_action';
 
+type EkoPackage = {
+  eeko_id?: string;
+  authorization_number?: string;
+  name?: string;
+  box?: string;
+  package_text?: string;
+  max_request_packages?: number;
+  reimbursement_rule?: string;
+};
+
+type EkoInfo = {
+  matched?: boolean;
+  match_status?: string;
+  packages?: EkoPackage[];
+  preferred_package?: EkoPackage | null;
+  box?: string | null;
+  reimbursement_rule?: string | null;
+  max_request_packages?: number;
+};
+
 type MedicationItem = {
   id: string;
   name: string;
   package_count?: number;
+  max_request_packages?: number;
+  package_text?: string;
+  box?: string;
+  reimbursement_rule?: string;
+  preferred_package?: EkoPackage;
+  eko?: EkoInfo;
   last_requested_at?: number;
   request_count?: number;
 };
@@ -51,6 +77,8 @@ export function MedicationDialogView({ room }: MedicationDialogProps) {
   const [activeList, setActiveList] = useState<'previous' | 'search' | 'selected'>('previous');
   const [showHidden, setShowHidden] = useState(false);
   const [localError, setLocalError] = useState<string>();
+  const [notice, setNotice] = useState<string>();
+  const [confirmRemoveId, setConfirmRemoveId] = useState<string>();
   const lastSentQuery = useRef('');
   const pending =
     !locallySubmitted &&
@@ -65,12 +93,16 @@ export function MedicationDialogView({ room }: MedicationDialogProps) {
     setQuery(nextQuery);
     lastSentQuery.current = nextQuery;
     setLocalError(undefined);
+    setNotice(undefined);
+    setConfirmRemoveId(undefined);
   }, [room.roomId, sessionId, dialogEventId]);
 
   useEffect(() => {
     setActiveList('previous');
     setShowHidden(false);
     setLocallySubmitted(false);
+    setNotice(undefined);
+    setConfirmRemoveId(undefined);
   }, [room.roomId, sessionId]);
 
   const sendAction = async (action: string, extra: Record<string, unknown> = {}) => {
@@ -87,7 +119,9 @@ export function MedicationDialogView({ room }: MedicationDialogProps) {
       return true;
     } catch (error) {
       setLocalError(
-        error instanceof Error ? error.message : 'Die Medikamentenauswahl konnte nicht gesendet werden.'
+        error instanceof Error
+          ? error.message
+          : 'Die Medikamentenauswahl konnte nicht gesendet werden.'
       );
       return false;
     } finally {
@@ -95,10 +129,209 @@ export function MedicationDialogView({ room }: MedicationDialogProps) {
     }
   };
 
-  const addMedication = (medicationId: string) => {
+  const maxPackages = (item: MedicationItem) => {
+    const raw = item.max_request_packages ?? item.eko?.max_request_packages ?? 1;
+    const value = Number.isFinite(Number(raw)) ? Number(raw) : 1;
+    return Math.min(3, Math.max(1, Math.trunc(value)));
+  };
+
+  const packageCount = (item: MedicationItem) => {
+    const value = Number.isFinite(Number(item.package_count)) ? Number(item.package_count) : 1;
+    return Math.min(maxPackages(item), Math.max(1, Math.trunc(value)));
+  };
+
+  const packageLabel = (count: number) => (count === 1 ? 'Packung' : 'Packungen');
+
+  const hasEkoInfo = (item: MedicationItem) =>
+    item.eko !== undefined || Boolean(item.box || item.package_text || item.preferred_package);
+
+  const ekoMatched = (item: MedicationItem) =>
+    item.eko?.matched === true || item.box === 'G' || item.box === 'Y';
+
+  const addMedication = (item: MedicationItem) => {
+    if (hasEkoInfo(item) && !ekoMatched(item)) {
+      setNotice('Dieses Medikament wird von der Krankenversicherung nicht erstattet.');
+      setConfirmRemoveId(undefined);
+      return;
+    }
     setQuery('');
     lastSentQuery.current = '';
-    void sendAction('add', { medication_id: medicationId });
+    void sendAction('add', { medication_id: item.id, package_count: packageCount(item) });
+  };
+
+  const setPackageCount = (item: MedicationItem, nextCount: number) => {
+    const currentMax = maxPackages(item);
+    if (nextCount > currentMax) {
+      setNotice('Maximum erreicht.');
+      return;
+    }
+    void sendAction('set_package_count', {
+      medication_id: item.id,
+      package_count: Math.min(currentMax, Math.max(1, nextCount)),
+    });
+  };
+
+  const decrementMedication = (item: MedicationItem) => {
+    const current = packageCount(item);
+    if (current <= 1) {
+      setConfirmRemoveId(item.id);
+      setNotice(undefined);
+      return;
+    }
+    setPackageCount(item, current - 1);
+  };
+
+  const removeMedication = (medicationId: string) => {
+    setConfirmRemoveId(undefined);
+    void sendAction('remove', { medication_id: medicationId });
+  };
+
+  const renderEkoBadge = (item: MedicationItem) => {
+    const box =
+      item.box ||
+      item.eko?.box ||
+      item.preferred_package?.box ||
+      item.eko?.preferred_package?.box ||
+      '';
+    const rule =
+      item.reimbursement_rule ||
+      item.eko?.reimbursement_rule ||
+      item.preferred_package?.reimbursement_rule ||
+      item.eko?.preferred_package?.reimbursement_rule ||
+      '';
+    const packageText =
+      item.package_text ||
+      item.preferred_package?.package_text ||
+      item.eko?.preferred_package?.package_text ||
+      '';
+    const known = hasEkoInfo(item);
+    const matched = ekoMatched(item);
+    const color = box === 'G' ? '#2f8f46' : box === 'Y' ? '#b7791f' : '#6b7280';
+    const label = !known
+      ? 'EKO-Info fehlt'
+      : matched
+      ? [box, rule, packageText].filter(Boolean).join(' · ')
+      : 'nicht im EKO';
+    return (
+      <span
+        style={{
+          display: 'inline-flex',
+          flex: '0 0 auto',
+          width: 'fit-content',
+          maxWidth: '100%',
+          minHeight: 22,
+          padding: '3px 8px',
+          borderRadius: 999,
+          backgroundColor: color,
+          color: '#ffffff',
+          fontSize: 12,
+          lineHeight: '16px',
+          overflowWrap: 'anywhere',
+          whiteSpace: 'normal',
+          alignItems: 'center',
+        }}
+      >
+        {label}
+      </span>
+    );
+  };
+
+  const renderMedicationButtonContent = (item: MedicationItem, suffix?: string) => (
+    <span
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 8,
+        alignItems: 'flex-start',
+        width: '100%',
+        minWidth: 0,
+      }}
+    >
+      <span style={{ display: 'block', lineHeight: '20px', overflowWrap: 'anywhere' }}>
+        {suffix ? `${item.name} ${suffix}` : item.name}
+      </span>
+      {renderEkoBadge(item)}
+    </span>
+  );
+
+  const renderSelectedItem = (item: MedicationItem) => {
+    const count = packageCount(item);
+    const currentMax = maxPackages(item);
+    const confirmRemove = confirmRemoveId === item.id;
+    return (
+      <Box
+        key={item.id}
+        direction="Column"
+        gap="100"
+        style={{ padding: '8px 0', borderBottom: '1px solid rgba(139, 139, 139, 0.35)' }}
+      >
+        <Text style={{ overflowWrap: 'anywhere' }}>{item.name}</Text>
+        {renderEkoBadge(item)}
+        <Box gap="200" alignItems="Center" style={{ flexWrap: 'wrap' }}>
+          <Button
+            variant="Secondary"
+            disabled={sending}
+            aria-label={count <= 1 ? `${item.name} entfernen` : `${item.name} eine Packung weniger`}
+            onClick={() => decrementMedication(item)}
+            style={{
+              minWidth: 44,
+              backgroundColor: '#ffffff',
+              color: '#111111',
+              borderColor: '#8b8b8b',
+            }}
+          >
+            −
+          </Button>
+          <Text style={{ minWidth: 96, textAlign: 'center' }}>
+            {count} {packageLabel(count)}
+          </Text>
+          <Button
+            variant="Secondary"
+            disabled={sending}
+            aria-label={`${item.name} eine Packung mehr`}
+            onClick={() => setPackageCount(item, count + 1)}
+            style={{
+              minWidth: 44,
+              backgroundColor: '#ffffff',
+              color: '#111111',
+              borderColor: '#8b8b8b',
+            }}
+          >
+            +
+          </Button>
+        </Box>
+        {currentMax <= 1 && (
+          <Text size="T200">Für dieses Medikament ist aktuell nur 1 Packung auswählbar.</Text>
+        )}
+        {confirmRemove && (
+          <Box
+            direction="Column"
+            gap="100"
+            style={{ padding: 10, border: '1px solid #922536', borderRadius: 8 }}
+          >
+            <Text>Medikament aus der Anforderungsliste entfernen?</Text>
+            <Box gap="200" justifyContent="End">
+              <Button
+                variant="Secondary"
+                disabled={sending}
+                onClick={() => setConfirmRemoveId(undefined)}
+                style={{ backgroundColor: '#ffffff', color: '#111111' }}
+              >
+                Abbrechen
+              </Button>
+              <Button
+                variant="Secondary"
+                disabled={sending}
+                onClick={() => removeMedication(item.id)}
+                style={{ backgroundColor: '#ffffff', color: '#111111', borderColor: '#922536' }}
+              >
+                Entfernen
+              </Button>
+            </Box>
+          </Box>
+        )}
+      </Box>
+    );
   };
 
   const submitSelection = async () => {
@@ -311,17 +544,28 @@ export function MedicationDialogView({ room }: MedicationDialogProps) {
                 <Text id="medication-dialog-title" size="H4">
                   Medikamente auswählen
                 </Text>
-                <Text>Suchen Sie Medikamente und fügen Sie diese Ihrer Anforderungsliste hinzu.</Text>
+                <Text>
+                  Suchen Sie Medikamente und fügen Sie diese Ihrer Anforderungsliste hinzu.
+                </Text>
               </Box>
 
               <Box gap="100" style={{ flexWrap: 'wrap' }}>
-                <Button style={tabStyle(activeList === 'previous')} onClick={() => setActiveList('previous')}>
+                <Button
+                  style={tabStyle(activeList === 'previous')}
+                  onClick={() => setActiveList('previous')}
+                >
                   Bisherige ({previous.length})
                 </Button>
-                <Button style={tabStyle(activeList === 'search')} onClick={() => setActiveList('search')}>
+                <Button
+                  style={tabStyle(activeList === 'search')}
+                  onClick={() => setActiveList('search')}
+                >
                   Neu suchen
                 </Button>
-                <Button style={tabStyle(activeList === 'selected')} onClick={() => setActiveList('selected')}>
+                <Button
+                  style={tabStyle(activeList === 'selected')}
+                  onClick={() => setActiveList('selected')}
+                >
                   Ausgewählt ({selected.length})
                 </Button>
               </Box>
@@ -330,7 +574,9 @@ export function MedicationDialogView({ room }: MedicationDialogProps) {
                 <input
                   type="search"
                   value={query}
-                  onChange={(evt: ChangeEvent<HTMLInputElement>) => setQuery(evt.currentTarget.value)}
+                  onChange={(evt: ChangeEvent<HTMLInputElement>) =>
+                    setQuery(evt.currentTarget.value)
+                  }
                   placeholder="Medikament suchen"
                   autoComplete="off"
                   autoFocus
@@ -350,6 +596,23 @@ export function MedicationDialogView({ room }: MedicationDialogProps) {
               {(localError || content.error) && (
                 <Text style={{ color: '#922536' }}>{localError ?? content.error}</Text>
               )}
+              {notice && (
+                <Box
+                  gap="200"
+                  alignItems="Center"
+                  style={{ padding: 10, border: '1px solid #6b7280', borderRadius: 8 }}
+                >
+                  <Text style={{ flex: 1 }}>{notice}</Text>
+                  <Button
+                    variant="Secondary"
+                    disabled={sending}
+                    onClick={() => setNotice(undefined)}
+                    style={{ backgroundColor: '#ffffff', color: '#111111' }}
+                  >
+                    OK
+                  </Button>
+                </Box>
+              )}
 
               <Box
                 direction="Column"
@@ -362,14 +625,12 @@ export function MedicationDialogView({ room }: MedicationDialogProps) {
                 }}
               >
                 {activeList === 'previous' && (
-                  <Box
-                    direction="Column"
-                    gap="100"
-                    style={{ padding: 12, border: '1px solid #8b8b8b', borderRadius: 10 }}
-                  >
+                  <Box direction="Column" gap="100" style={{ padding: 0 }}>
                     <Text size="L400">Bisher angeforderte Medikamente</Text>
                     <Text>Tippen Sie ein Medikament an, um es auszuwählen.</Text>
-                    {previous.length === 0 && <Text>Noch keine bisherigen Medikamente vorhanden.</Text>}
+                    {previous.length === 0 && (
+                      <Text>Noch keine bisherigen Medikamente vorhanden.</Text>
+                    )}
                     {previous
                       .filter((item) => !selectedIds.has(item.id))
                       .map((item) => (
@@ -377,14 +638,14 @@ export function MedicationDialogView({ room }: MedicationDialogProps) {
                           <Button
                             variant="Secondary"
                             disabled={sending}
-                            onClick={() => addMedication(item.id)}
+                            onClick={() => addMedication(item)}
                             style={{
                               flex: 1,
                               justifyContent: 'flex-start',
-                              minHeight: 52,
+                              minHeight: 74,
                               height: 'auto',
-                              padding: '10px 12px',
-                              lineHeight: 1.35,
+                              padding: '12px',
+                              lineHeight: '20px',
                               whiteSpace: 'normal',
                               textAlign: 'left',
                               overflowWrap: 'anywhere',
@@ -393,7 +654,10 @@ export function MedicationDialogView({ room }: MedicationDialogProps) {
                               borderColor: '#8b8b8b',
                             }}
                           >
-                            {item.name} · zuletzt {formatDate(item.last_requested_at)}
+                            {renderMedicationButtonContent(
+                              item,
+                              `· zuletzt ${formatDate(item.last_requested_at)}`
+                            )}
                           </Button>
                           <Button
                             variant="Secondary"
@@ -413,7 +677,9 @@ export function MedicationDialogView({ room }: MedicationDialogProps) {
                         onClick={() => setShowHidden((value) => !value)}
                         style={{ backgroundColor: '#ffffff', color: '#111111' }}
                       >
-                        {showHidden ? 'Ausgeblendete schließen' : `Ausgeblendete anzeigen (${hiddenPrevious.length})`}
+                        {showHidden
+                          ? 'Ausgeblendete schließen'
+                          : `Ausgeblendete anzeigen (${hiddenPrevious.length})`}
                       </Button>
                     )}
                     {showHidden &&
@@ -442,74 +708,56 @@ export function MedicationDialogView({ room }: MedicationDialogProps) {
                 )}
 
                 {activeList === 'search' && (
-                  <Box
-                    direction="Column"
-                    gap="100"
-                    style={{ padding: 12, border: '1px solid #8b8b8b', borderRadius: 10 }}
-                  >
-                  <Text size="L400">Suchergebnisse</Text>
-                  {query.trim().length < 2 && <Text>Geben Sie mindestens zwei Zeichen ein.</Text>}
-                  {query.trim().length >= 2 && results.length === 0 && !sending && (
-                    <Text>Kein passendes Medikament gefunden.</Text>
-                  )}
-                  {results
-                    .filter((item) => !selectedIds.has(item.id))
-                    .map((item) => (
-                      <Button
-                        key={item.id}
-                        variant="Secondary"
-                        disabled={sending}
-                        onClick={() => addMedication(item.id)}
-                        style={{
-                          justifyContent: 'flex-start',
-                          minHeight: 48,
-                          height: 'auto',
-                          padding: '10px 12px',
-                          lineHeight: 1.35,
-                          textAlign: 'left',
-                          whiteSpace: 'normal',
-                          overflowWrap: 'anywhere',
-                          backgroundColor: '#ffffff',
-                          color: '#111111',
-                          borderColor: '#8b8b8b',
-                        }}
-                      >
-                        {item.name} hinzufügen
-                      </Button>
-                    ))}
+                  <Box direction="Column" gap="100" style={{ padding: 0 }}>
+                    <Text size="L400">Suchergebnisse</Text>
+                    {query.trim().length < 2 && <Text>Geben Sie mindestens zwei Zeichen ein.</Text>}
+                    {query.trim().length >= 2 && results.length === 0 && !sending && (
+                      <Text>Kein passendes Medikament gefunden.</Text>
+                    )}
+                    {results
+                      .filter((item) => !selectedIds.has(item.id))
+                      .map((item) => (
+                        <Button
+                          key={item.id}
+                          variant="Secondary"
+                          disabled={sending}
+                          onClick={() => addMedication(item)}
+                          style={{
+                            justifyContent: 'flex-start',
+                            minHeight: 74,
+                            height: 'auto',
+                            padding: '12px',
+                            lineHeight: '20px',
+                            textAlign: 'left',
+                            whiteSpace: 'normal',
+                            overflowWrap: 'anywhere',
+                            backgroundColor: '#ffffff',
+                            color: '#111111',
+                            borderColor: '#8b8b8b',
+                          }}
+                        >
+                          {renderMedicationButtonContent(item, 'hinzufügen')}
+                        </Button>
+                      ))}
                   </Box>
                 )}
 
                 {activeList === 'selected' && (
                   <Box
-                  direction="Column"
-                  gap="100"
-                  style={{
-                    flex: '0 0 auto',
-                    padding: 12,
-                    border: '2px solid #1e7f93',
-                    borderRadius: 10,
-                    backgroundColor: '#ffffff',
-                    color: '#111111',
-                  }}
-                >
-                  <Text size="L400">Anforderungsliste</Text>
-                  {selected.length === 0 && <Text>Noch kein Medikament ausgewählt.</Text>}
-                  {selected.map((item) => (
-                    <Box key={item.id} gap="200" alignItems="Center" style={{ padding: '6px 0' }}>
-                      <Text style={{ flex: 1, overflowWrap: 'anywhere' }}>
-                        1 Packung {item.name}
-                      </Text>
-                      <Button
-                        variant="Secondary"
-                        disabled={sending}
-                        onClick={() => sendAction('remove', { medication_id: item.id })}
-                        style={{ backgroundColor: '#ffffff', color: '#111111', borderColor: '#8b8b8b' }}
-                      >
-                        Entfernen
-                      </Button>
-                    </Box>
-                  ))}
+                    direction="Column"
+                    gap="100"
+                    style={{
+                      flex: '0 0 auto',
+                      padding: 12,
+                      border: '2px solid #1e7f93',
+                      borderRadius: 10,
+                      backgroundColor: '#ffffff',
+                      color: '#111111',
+                    }}
+                  >
+                    <Text size="L400">Anforderungsliste</Text>
+                    {selected.length === 0 && <Text>Noch kein Medikament ausgewählt.</Text>}
+                    {selected.map((item) => renderSelectedItem(item))}
                   </Box>
                 )}
               </Box>
@@ -530,19 +778,7 @@ export function MedicationDialogView({ room }: MedicationDialogProps) {
                   }}
                 >
                   <Text size="L400">Ausgewählte Medikamente ({selected.length})</Text>
-                  {selected.map((item) => (
-                    <Box key={item.id} gap="200" alignItems="Center">
-                      <Text style={{ flex: 1, overflowWrap: 'anywhere' }}>1 Packung {item.name}</Text>
-                      <Button
-                        variant="Secondary"
-                        disabled={sending}
-                        onClick={() => sendAction('remove', { medication_id: item.id })}
-                        style={{ backgroundColor: '#ffffff', color: '#111111' }}
-                      >
-                        Entfernen
-                      </Button>
-                    </Box>
-                  ))}
+                  {selected.map((item) => renderSelectedItem(item))}
                 </Box>
               )}
 
