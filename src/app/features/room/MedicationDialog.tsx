@@ -381,9 +381,13 @@ export function MedicationDialogView({ room }: MedicationDialogProps) {
                             style={{
                               flex: 1,
                               justifyContent: 'flex-start',
-                              minHeight: 48,
+                              minHeight: 52,
+                              height: 'auto',
+                              padding: '10px 12px',
+                              lineHeight: 1.35,
                               whiteSpace: 'normal',
                               textAlign: 'left',
+                              overflowWrap: 'anywhere',
                               backgroundColor: '#ffffff',
                               color: '#111111',
                               borderColor: '#8b8b8b',
@@ -419,7 +423,17 @@ export function MedicationDialogView({ room }: MedicationDialogProps) {
                           variant="Secondary"
                           disabled={sending}
                           onClick={() => sendAction('unhide_previous', { medication_id: item.id })}
-                          style={{ backgroundColor: '#ffffff', color: '#111111', textAlign: 'left' }}
+                          style={{
+                            minHeight: 44,
+                            height: 'auto',
+                            padding: '10px 12px',
+                            lineHeight: 1.35,
+                            backgroundColor: '#ffffff',
+                            color: '#111111',
+                            textAlign: 'left',
+                            whiteSpace: 'normal',
+                            overflowWrap: 'anywhere',
+                          }}
                         >
                           {item.name} wieder anzeigen
                         </Button>
@@ -448,7 +462,10 @@ export function MedicationDialogView({ room }: MedicationDialogProps) {
                         onClick={() => addMedication(item.id)}
                         style={{
                           justifyContent: 'flex-start',
-                          minHeight: 42,
+                          minHeight: 48,
+                          height: 'auto',
+                          padding: '10px 12px',
+                          lineHeight: 1.35,
                           textAlign: 'left',
                           whiteSpace: 'normal',
                           overflowWrap: 'anywhere',
