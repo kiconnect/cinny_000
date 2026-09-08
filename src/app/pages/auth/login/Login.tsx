@@ -78,14 +78,16 @@ export function Login() {
           <Box className={css.KiconnectLoginInfo} direction="Column" gap="200">
             <Text size="L400">So geht es weiter:</Text>
             <Text size="T300">
-              Bei der ersten Anmeldung zeigt der sichere Matrix-Server anschließend eine Seite mit
-              der Schaltfläche „Continue“. Bitte bestätigen Sie dort einmalig mit „Continue“.
+              Wählen Sie „Bei KIconnect anmelden“ und bestätigen Sie die Anmeldung mit dem Passkey,
+              den Sie soeben eingerichtet haben.
             </Text>
             <Text size="T300">
-              Danach öffnet sich der KIconnect Chatclient. Wählen Sie dort Ihren persönlichen
-              KIconnect-Raum; Teamzugänge sehen stattdessen ihre Teamräume. Mit einem persönlichen
-              Zugang bleiben Sie auf diesem Gerät angemeldet, bis Sie sich im Menü „…“ selbst
-              abmelden.
+              Bei der ersten Anmeldung zeigt der sichere Matrix-Server danach eine Seite mit der
+              Schaltfläche „Continue“. Bitte bestätigen Sie dort einmalig mit „Continue“.
+            </Text>
+            <Text size="T300">
+              Anschließend öffnet sich der KIconnect Chatclient. Wählen Sie dort Ihren persönlichen
+              KIconnect-Raum; Teamzugänge sehen stattdessen ihre Teamräume.
             </Text>
             <Text
               as="a"
@@ -94,7 +96,7 @@ export function Login() {
               target="_blank"
               rel="noreferrer noopener"
             >
-              Hilfe zur App-Installation und zu weiteren Geräten
+              Anleitungen: kiconnect.at/help
             </Text>
           </Box>
           <SSOLogin
