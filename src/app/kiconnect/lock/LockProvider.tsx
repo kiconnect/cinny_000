@@ -131,13 +131,6 @@ export function KiconnectLockProvider({ children, mx }: Props): JSX.Element {
     [userId]
   );
 
-  const readServerIdleTimeout = useCallback(() => {
-    if (!mx) return;
-    const content = mx.getAccountData(KICONNECT_PREFERENCES_EVENT_TYPE as any)?.getContent();
-    const minutes = parseIdleTimeoutMinutes(content?.idle_timeout_minutes);
-    if (minutes !== undefined) applyIdleTimeout(minutes);
-  }, [applyIdleTimeout, mx]);
-
   const syncCentralIdleTimeout = useCallback(async () => {
     const preferencesUrl = config.kiconnectLock?.preferencesUrl;
     const accessToken = mx?.getAccessToken();
@@ -182,10 +175,15 @@ export function KiconnectLockProvider({ children, mx }: Props): JSX.Element {
         const detected = detectAccountType(mx);
         writeAccountType(userId, detected);
         setAccountType(detected);
-        readServerIdleTimeout();
+        const matrixContent = mx
+          .getAccountData(KICONNECT_PREFERENCES_EVENT_TYPE as any)
+          ?.getContent();
+        const existing = parseIdleTimeoutMinutes(matrixContent?.idle_timeout_minutes);
+        const accountDefault = detected === 'patient' ? 0 : defaultIdleTimeoutMinutes;
+        applyIdleTimeout(existing ?? accountDefault);
         void syncCentralIdleTimeout();
       },
-      [mx, readServerIdleTimeout, syncCentralIdleTimeout, userId]
+      [applyIdleTimeout, defaultIdleTimeoutMinutes, mx, syncCentralIdleTimeout, userId]
     )
   );
 
