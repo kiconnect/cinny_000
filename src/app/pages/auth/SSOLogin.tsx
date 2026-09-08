@@ -32,7 +32,9 @@ export function SSOLogin({ providers, redirectUrl, action, saveScreenSpace }: SS
           const { id, name, icon } = provider;
           const iconUrl = icon && mx.mxcUrlToHttp(icon, 96, 96, 'crop', false);
 
-          const buttonTitle = `Continue with ${name}`;
+          const buttonTitle = name.toLowerCase().includes('kiconnect')
+            ? 'Bei KIconnect anmelden'
+            : `Mit ${name} anmelden`;
 
           if (renderAsIcons) {
             return (
@@ -85,7 +87,7 @@ export function SSOLogin({ providers, redirectUrl, action, saveScreenSpace }: SS
           outlined
         >
           <Text align="Center" size="B500" truncate>
-            Continue with SSO
+            Bei KIconnect anmelden
           </Text>
         </Button>
       )}

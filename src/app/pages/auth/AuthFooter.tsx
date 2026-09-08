@@ -8,6 +8,15 @@ export function AuthFooter() {
       <Text
         as="a"
         size="T300"
+        href="https://kiconnect.at/help"
+        target="_blank"
+        rel="noreferrer noopener"
+      >
+        Hilfe
+      </Text>
+      <Text
+        as="a"
+        size="T300"
         href="https://portal.kiconnect.at/legal/Impressum-Datenschutz"
         target="_blank"
         rel="noreferrer"

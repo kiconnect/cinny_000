@@ -52,3 +52,10 @@ export const AuthCardContent = style({
 export const AuthFooter = style({
   padding: config.space.S200,
 });
+
+export const KiconnectLoginInfo = style({
+  padding: config.space.S300,
+  border: `${config.borderWidth.B300} solid ${color.Surface.ContainerLine}`,
+  borderRadius: config.radii.R300,
+  backgroundColor: color.Surface.Container,
+});

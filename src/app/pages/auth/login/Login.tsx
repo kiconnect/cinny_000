@@ -13,6 +13,7 @@ import { getLoginPath, getRegisterPath, withSearchParam } from '../../pathUtils'
 import { usePathWithOrigin } from '../../../hooks/usePathWithOrigin';
 import { LoginPathSearchParams } from '../../paths';
 import { useClientConfig } from '../../../hooks/useClientConfig';
+import * as css from '../styles.css';
 
 const getLoginTokenSearchParam = () => {
   // when using hasRouter query params in existing route
@@ -57,7 +58,7 @@ export function Login() {
   return (
     <Box direction="Column" gap="500">
       <Text size="H2" priority="400">
-        Login
+        Bei KIconnect anmelden
       </Text>
       {parsedFlows.token && loginSearchParams.loginToken && (
         <TokenLogin token={loginSearchParams.loginToken} />
@@ -74,6 +75,28 @@ export function Login() {
       )}
       {parsedFlows.sso && (
         <>
+          <Box className={css.KiconnectLoginInfo} direction="Column" gap="200">
+            <Text size="L400">So geht es weiter:</Text>
+            <Text size="T300">
+              Bei der ersten Anmeldung zeigt der sichere Matrix-Server anschließend eine Seite mit
+              der Schaltfläche „Continue“. Bitte bestätigen Sie dort einmalig mit „Continue“.
+            </Text>
+            <Text size="T300">
+              Danach öffnet sich der KIconnect Chatclient. Wählen Sie dort Ihren persönlichen
+              KIconnect-Raum; Teamzugänge sehen stattdessen ihre Teamräume. Mit einem persönlichen
+              Zugang bleiben Sie auf diesem Gerät angemeldet, bis Sie sich im Menü „…“ selbst
+              abmelden.
+            </Text>
+            <Text
+              as="a"
+              size="T300"
+              href="https://kiconnect.at/help"
+              target="_blank"
+              rel="noreferrer noopener"
+            >
+              Hilfe zur App-Installation und zu weiteren Geräten
+            </Text>
+          </Box>
           <SSOLogin
             providers={parsedFlows.sso.identity_providers}
             redirectUrl={ssoRedirectUrl}
