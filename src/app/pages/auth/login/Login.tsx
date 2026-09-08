@@ -78,8 +78,8 @@ export function Login() {
           <Box className={css.KiconnectLoginInfo} direction="Column" gap="200">
             <Text size="L400">So geht es weiter:</Text>
             <Text size="T300">
-              Wählen Sie „Bei KIconnect anmelden“ und bestätigen Sie die Anmeldung mit dem Passkey,
-              den Sie soeben eingerichtet haben.
+              Wählen Sie „Bei KIconnect anmelden“ und bestätigen Sie die Anmeldung mit Ihrem
+              Passkey.
             </Text>
             <Text size="T300">
               Bei der ersten Anmeldung zeigt der sichere Matrix-Server danach eine Seite mit der
