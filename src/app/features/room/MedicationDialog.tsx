@@ -1,6 +1,16 @@
 import React, { ChangeEvent, useEffect, useRef, useState } from 'react';
 import FocusTrap from 'focus-trap-react';
-import { Box, Button, Dialog, Overlay, OverlayBackdrop, OverlayCenter, Text } from 'folds';
+import {
+  Box,
+  Button,
+  Dialog,
+  Icon,
+  Icons,
+  Overlay,
+  OverlayBackdrop,
+  OverlayCenter,
+  Text,
+} from 'folds';
 import type { Room } from 'matrix-js-sdk/src/matrix';
 import { StateEvent } from '../../../types/matrix/room';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
@@ -81,7 +91,10 @@ export function MedicationDialogView({ room }: MedicationDialogProps) {
   const sessionId = content.session_id ?? '';
 
   const [query, setQuery] = useState('');
-  const [sending, setSending] = useState(false);
+  const [networkSending, setSending] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const sending = networkSending || submitting;
+  const [hideCandidate, setHideCandidate] = useState<MedicationItem>();
   const [locallySubmitted, setLocallySubmitted] = useState(false);
   const [activeList, setActiveList] = useState<'previous' | 'search' | 'selected'>('previous');
   const [showHidden, setShowHidden] = useState(false);
@@ -113,12 +126,38 @@ export function MedicationDialogView({ room }: MedicationDialogProps) {
   }, [room.roomId, sessionId, dialogEventId, content.beneficiary]);
 
   useEffect(() => {
+    setSubmitting(false);
+    setHideCandidate(undefined);
     setActiveList('previous');
     setShowHidden(false);
     setLocallySubmitted(false);
     setNotice(undefined);
     setConfirmRemoveId(undefined);
   }, [room.roomId, sessionId]);
+
+  useEffect(() => {
+    if (!submitting) return undefined;
+    if (content.status === 'resolved') {
+      setSubmitting(false);
+      window.dispatchEvent(
+        new CustomEvent('kiconnect.medication.completed', {
+          detail: { roomId: room.roomId },
+        })
+      );
+      return undefined;
+    }
+    if (content.error) {
+      setSubmitting(false);
+      return undefined;
+    }
+    const timeout = window.setTimeout(() => {
+      setSubmitting(false);
+      setLocalError(
+        'Noch keine Bestätigung erhalten. Bitte prüfen Sie den Chat, bevor Sie erneut fortfahren.'
+      );
+    }, 45000);
+    return () => window.clearTimeout(timeout);
+  }, [submitting, content.status, content.error, room.roomId]);
 
   const sendAction = async (action: string, extra: Record<string, unknown> = {}) => {
     if (!sessionId) return false;
@@ -163,7 +202,7 @@ export function MedicationDialogView({ room }: MedicationDialogProps) {
   const ekoMatched = (item: MedicationItem) =>
     item.eko?.matched === true || item.box === 'G' || item.box === 'Y';
 
-  const addMedication = (item: MedicationItem) => {
+  const addMedication = (item: MedicationItem, source: 'previous' | 'search') => {
     if (hasEkoInfo(item) && !ekoMatched(item)) {
       setNotice('Dieses Medikament wird von der Krankenversicherung nicht erstattet.');
       setConfirmRemoveId(undefined);
@@ -171,7 +210,11 @@ export function MedicationDialogView({ room }: MedicationDialogProps) {
     }
     setQuery('');
     lastSentQuery.current = '';
-    void sendAction('add', { medication_id: item.id, package_count: packageCount(item) });
+    void sendAction('add', {
+      medication_id: item.id,
+      package_count: packageCount(item),
+      selection_source: source,
+    });
   };
 
   const setPackageCount = (item: MedicationItem, nextCount: number) => {
@@ -354,9 +397,9 @@ export function MedicationDialogView({ room }: MedicationDialogProps) {
   };
 
   const submitSelection = async () => {
-    setLocallySubmitted(true);
+    setSubmitting(true);
     if (!(await sendAction('submit'))) {
-      setLocallySubmitted(false);
+      setSubmitting(false);
     }
   };
 
@@ -773,12 +816,9 @@ export function MedicationDialogView({ room }: MedicationDialogProps) {
                 color: '#111111',
               }}
             >
-              <Box direction="Column" gap="100">
+              <Box direction="Column" gap="100" style={{ flexShrink: 0 }}>
                 <Text id="medication-dialog-title" size="H4">
                   Medikamente auswählen
-                </Text>
-                <Text>
-                  Suchen Sie Medikamente und fügen Sie diese Ihrer Anforderungsliste hinzu.
                 </Text>
               </Box>
 
@@ -829,6 +869,42 @@ export function MedicationDialogView({ room }: MedicationDialogProps) {
               {(localError || content.error) && (
                 <Text style={{ color: '#922536' }}>{localError ?? content.error}</Text>
               )}
+              {hideCandidate && (
+                <Box
+                  direction="Column"
+                  gap="200"
+                  style={{
+                    flexShrink: 0,
+                    padding: 12,
+                    border: '1px solid #922536',
+                    borderRadius: 8,
+                  }}
+                >
+                  <Text>
+                    {hideCandidate.name} aus „Bisherige“ entfernen? Frühere Anforderungen bleiben
+                    dokumentiert.
+                  </Text>
+                  <Box gap="200" justifyContent="End">
+                    <Button
+                      variant="Secondary"
+                      disabled={sending}
+                      onClick={() => setHideCandidate(undefined)}
+                    >
+                      Abbrechen
+                    </Button>
+                    <Button
+                      variant="Secondary"
+                      disabled={sending}
+                      onClick={async () => {
+                        if (await sendAction('hide_previous', { medication_id: hideCandidate.id }))
+                          setHideCandidate(undefined);
+                      }}
+                    >
+                      Entfernen
+                    </Button>
+                  </Box>
+                </Box>
+              )}
               {notice && (
                 <Box
                   gap="200"
@@ -873,7 +949,7 @@ export function MedicationDialogView({ room }: MedicationDialogProps) {
                           <Button
                             variant="Secondary"
                             disabled={sending}
-                            onClick={() => addMedication(item)}
+                            onClick={() => addMedication(item, 'previous')}
                             style={{
                               flex: '1 1 0',
                               minWidth: 0,
@@ -899,12 +975,12 @@ export function MedicationDialogView({ room }: MedicationDialogProps) {
                           <Button
                             variant="Secondary"
                             disabled={sending}
-                            aria-label={`${item.name} nicht mehr anzeigen`}
-                            title="Nicht mehr anzeigen"
-                            onClick={() => sendAction('hide_previous', { medication_id: item.id })}
+                            aria-label={`${item.name} aus Bisherige entfernen`}
+                            title="Aus Bisherige entfernen"
+                            onClick={() => setHideCandidate(item)}
                             style={{ minWidth: 44, backgroundColor: '#ffffff', color: '#111111' }}
                           >
-                            …
+                            <Icon size="50" src={Icons.Delete} />
                           </Button>
                         </Box>
                       ))}
@@ -959,7 +1035,7 @@ export function MedicationDialogView({ room }: MedicationDialogProps) {
                           key={item.id}
                           variant="Secondary"
                           disabled={sending}
-                          onClick={() => addMedication(item)}
+                          onClick={() => addMedication(item, 'search')}
                           style={{
                             justifyContent: 'flex-start',
                             flexShrink: 0,
@@ -1022,6 +1098,10 @@ export function MedicationDialogView({ room }: MedicationDialogProps) {
               )}
 
               <Box direction="Column" gap="200" style={{ flex: '0 0 auto' }}>
+                <Text size="T200">
+                  Ihre Medikamentenauswahl ist vollständig? Im Chat geht es mit der Zusammenfassung
+                  und gegebenenfalls einer Rückfrage weiter.
+                </Text>
                 <Button
                   variant="Primary"
                   disabled={sending || selected.length === 0}
@@ -1035,7 +1115,7 @@ export function MedicationDialogView({ room }: MedicationDialogProps) {
                     color: '#111111',
                   }}
                 >
-                  Auswahl abschließen
+                  {submitting ? 'Auswahl wird übernommen …' : 'Im Chat fortfahren'}
                 </Button>
                 <Button
                   variant="Secondary"

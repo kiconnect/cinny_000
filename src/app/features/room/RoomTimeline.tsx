@@ -891,6 +891,19 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     scrollToBottomRef.current.smooth = false;
   };
 
+  useEffect(() => {
+    const onMedicationCompleted = (event: Event) => {
+      if ((event as CustomEvent<{ roomId: string }>).detail?.roomId === room.roomId) {
+        handleJumpToLatest();
+      }
+    };
+    window.addEventListener('kiconnect.medication.completed', onMedicationCompleted);
+    return () =>
+      window.removeEventListener('kiconnect.medication.completed', onMedicationCompleted);
+    // Use the current room and navigation state for the existing jump-to-latest action.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room, eventId]);
+
   const handleJumpToUnread = () => {
     if (unreadInfo?.readUptoEventId) {
       setTimeline(getEmptyTimeline());
