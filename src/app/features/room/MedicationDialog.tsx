@@ -278,7 +278,11 @@ export function MedicationDialogView({ room }: MedicationDialogProps) {
         key={item.id}
         direction="Column"
         gap="100"
-        style={{ padding: '8px 0', borderBottom: '1px solid rgba(139, 139, 139, 0.35)' }}
+        style={{
+          flex: '0 0 auto',
+          padding: '8px 0',
+          borderBottom: '1px solid rgba(139, 139, 139, 0.35)',
+        }}
       >
         <Text style={{ overflowWrap: 'anywhere' }}>{item.name}</Text>
         {renderEkoBadge(item)}
@@ -778,7 +782,7 @@ export function MedicationDialogView({ room }: MedicationDialogProps) {
                 </Text>
               </Box>
 
-              <Box gap="100" style={{ flexWrap: 'wrap' }}>
+              <Box gap="100" style={{ flexWrap: 'wrap', flexShrink: 0 }}>
                 <Button
                   style={tabStyle(activeList === 'previous')}
                   onClick={() => setActiveList('previous')}
@@ -848,13 +852,15 @@ export function MedicationDialogView({ room }: MedicationDialogProps) {
                 gap="300"
                 style={{
                   overflowY: 'auto',
+                  scrollbarGutter: 'stable',
+                  maxHeight: activeList === 'previous' ? 320 : undefined,
                   flex: '1 1 auto',
                   minHeight: 0,
                   paddingRight: 2,
                 }}
               >
                 {activeList === 'previous' && (
-                  <Box direction="Column" gap="100" style={{ padding: 0 }}>
+                  <Box direction="Column" gap="100" style={{ flex: '0 0 auto', padding: 0 }}>
                     <Text size="L400">Bisher angeforderte Medikamente</Text>
                     <Text>Tippen Sie ein Medikament an, um es auszuwählen.</Text>
                     {previous.length === 0 && (
@@ -863,14 +869,16 @@ export function MedicationDialogView({ room }: MedicationDialogProps) {
                     {previous
                       .filter((item) => !selectedIds.has(item.id))
                       .map((item) => (
-                        <Box key={item.id} gap="100" alignItems="Center">
+                        <Box key={item.id} gap="100" alignItems="Center" style={{ flexShrink: 0 }}>
                           <Button
                             variant="Secondary"
                             disabled={sending}
                             onClick={() => addMedication(item)}
                             style={{
-                              flex: 1,
+                              flex: '1 1 0',
+                              minWidth: 0,
                               justifyContent: 'flex-start',
+                              flexShrink: 0,
                               minHeight: 74,
                               height: 'auto',
                               padding: '12px',
@@ -919,6 +927,7 @@ export function MedicationDialogView({ room }: MedicationDialogProps) {
                           disabled={sending}
                           onClick={() => sendAction('unhide_previous', { medication_id: item.id })}
                           style={{
+                            flexShrink: 0,
                             minHeight: 44,
                             height: 'auto',
                             padding: '10px 12px',
@@ -937,7 +946,7 @@ export function MedicationDialogView({ room }: MedicationDialogProps) {
                 )}
 
                 {activeList === 'search' && (
-                  <Box direction="Column" gap="100" style={{ padding: 0 }}>
+                  <Box direction="Column" gap="100" style={{ flex: '0 0 auto', padding: 0 }}>
                     <Text size="L400">Suchergebnisse</Text>
                     {query.trim().length < 2 && <Text>Geben Sie mindestens zwei Zeichen ein.</Text>}
                     {query.trim().length >= 2 && results.length === 0 && !sending && (
@@ -953,6 +962,7 @@ export function MedicationDialogView({ room }: MedicationDialogProps) {
                           onClick={() => addMedication(item)}
                           style={{
                             justifyContent: 'flex-start',
+                            flexShrink: 0,
                             minHeight: 74,
                             height: 'auto',
                             padding: '12px',
