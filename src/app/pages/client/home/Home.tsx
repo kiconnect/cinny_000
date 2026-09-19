@@ -105,6 +105,19 @@ const HomeMenu = forwardRef<HTMLDivElement, HomeMenuProps>(({ requestClose }, re
             Mark as Read
           </Text>
         </MenuItem>
+        <MenuItem
+          onClick={() => {
+            window.open('https://kiconnect.at/help/', '_blank', 'noopener,noreferrer');
+            requestClose();
+          }}
+          size="300"
+          radii="300"
+          after={<Icon size="100" src={Icons.Info} />}
+        >
+          <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
+            Hilfe
+          </Text>
+        </MenuItem>
       </Box>
     </Menu>
   );

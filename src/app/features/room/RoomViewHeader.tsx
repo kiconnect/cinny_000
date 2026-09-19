@@ -344,6 +344,19 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(
               {loggingOut ? 'Abmeldung läuft …' : 'Vollständig abmelden'}
             </Text>
           </MenuItem>
+          <MenuItem
+            onClick={() => {
+              window.open('https://kiconnect.at/help/', '_blank', 'noopener,noreferrer');
+              requestClose();
+            }}
+            size="300"
+            radii="300"
+            after={<Icon size="100" src={Icons.Info} />}
+          >
+            <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
+              Hilfe
+            </Text>
+          </MenuItem>
         </Box>
       </Menu>
     );
