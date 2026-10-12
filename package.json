@@ -20,6 +20,7 @@
     "check:prettier": "prettier --check .",
     "fix:prettier": "prettier --write .",
     "typecheck": "tsc --noEmit",
+    "test:case-status": "node tests/case-status.test.mjs",
     "prepare": "husky install",
     "commit": "git-cz",
     "bump": "node scripts/update-version.js"

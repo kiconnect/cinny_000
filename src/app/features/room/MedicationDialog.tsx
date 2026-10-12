@@ -19,6 +19,7 @@ import { getRoomOwner, isPatientRoom } from '../../kiconnect/logic/roomState';
 
 const DIALOG_EVENT = 'io.kiconnect.medication_dialog';
 const ACTION_EVENT = 'io.kiconnect.medication_action';
+const MAX_PACKAGES_NOTICE = 'Maximum erreicht.';
 
 type EkoPackage = {
   eeko_id?: string;
@@ -220,7 +221,7 @@ export function MedicationDialogView({ room }: MedicationDialogProps) {
   const setPackageCount = (item: MedicationItem, nextCount: number) => {
     const currentMax = maxPackages(item);
     if (nextCount > currentMax) {
-      setNotice('Maximum erreicht.');
+      setNotice(MAX_PACKAGES_NOTICE);
       return;
     }
     void sendAction('set_package_count', {
@@ -446,6 +447,10 @@ export function MedicationDialogView({ room }: MedicationDialogProps) {
   const formButtonStyle = {
     width: '100%',
     minHeight: 56,
+    height: 'auto',
+    flexShrink: 0,
+    overflowWrap: 'anywhere' as const,
+    lineHeight: 1.35,
     justifyContent: 'flex-start',
     whiteSpace: 'normal' as const,
     textAlign: 'left' as const,
@@ -911,7 +916,15 @@ export function MedicationDialogView({ room }: MedicationDialogProps) {
                   alignItems="Center"
                   style={{ padding: 10, border: '1px solid #6b7280', borderRadius: 8 }}
                 >
-                  <Text style={{ flex: 1 }}>{notice}</Text>
+                  <Text
+                    style={{
+                      flex: 1,
+                      color: notice === MAX_PACKAGES_NOTICE ? '#922536' : undefined,
+                      fontWeight: notice === MAX_PACKAGES_NOTICE ? 700 : undefined,
+                    }}
+                  >
+                    {notice}
+                  </Text>
                   <Button
                     variant="Secondary"
                     disabled={sending}
@@ -1115,7 +1128,7 @@ export function MedicationDialogView({ room }: MedicationDialogProps) {
                     color: '#111111',
                   }}
                 >
-                  {submitting ? 'Auswahl wird übernommen …' : 'Im Chat fortfahren'}
+                  {submitting ? 'Auswahl wird übernommen …' : 'Bestellung im Chat abschließen'}
                 </Button>
                 <Button
                   variant="Secondary"

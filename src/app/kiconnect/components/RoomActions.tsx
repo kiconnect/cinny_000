@@ -1,11 +1,27 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { getHomeRoomPath } from '../../pages/pathUtils';
+import { findCreatedTeamRoom } from '../logic/teamRequestNavigation';
 import { Box, Button, Dialog, Overlay, OverlayBackdrop, OverlayCenter, Text } from 'folds';
 import type { Room } from 'matrix-js-sdk/src/matrix';
-import type { MatrixClient } from 'matrix-js-sdk';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useSelectedSpace } from '../../hooks/router/useSelectedSpace';
+import { useCaseRoleStatus } from '../hooks/useCaseRoleStatus';
+import { suggestTeamRequestTopic } from '../logic/teamRequestTopic';
+import {
+  getCaseContent,
+  sendCaseAction,
+  type CaseRole,
+  type CaseStatus,
+} from '../logic/caseStatus';
 
-import { getRoomOwner, isPatientRoom, isTeamCommunicationRoom, isTeamRequestRoom, isTeamRoom } from '../logic/roomState';
+import {
+  getRoomOwner,
+  isPatientRoom,
+  isTeamCommunicationRoom,
+  isTeamRequestRoom,
+  isTeamRoom,
+} from '../logic/roomState';
 import { delete_done } from '../logic/delete_done';
 import KiconnectSearchDialog from '../components/KiconnectSearchDialog';
 import KiconnectDayListDialog from '../components/KiconnectDayListDialog';
@@ -15,24 +31,6 @@ import '../styles/RoomActions.css';
 
 type Props = {
   room: Room;
-};
-
-type CaseStatus = 'open' | 'pending' | 'waiting' | 'done';
-type CaseRole = 'arzt' | 'team';
-
-type CaseRoleEntry = {
-  space_room_id?: string;
-  state?: string;
-};
-
-type CaseContent = {
-  waiting_patient?: boolean;
-  waiting_since?: number | null;
-  waiting_owner_role?: CaseRole | string | null;
-  roles?: {
-    arzt?: CaseRoleEntry | string;
-    team?: CaseRoleEntry | string;
-  };
 };
 
 type TeamDirectoryMember = {
@@ -65,93 +63,6 @@ function normalizeState(value: unknown): CaseStatus {
   return 'open';
 }
 
-function getRoleEntryState(entry: CaseRoleEntry | string | undefined): CaseStatus {
-  if (typeof entry === 'string') {
-    return normalizeState(entry);
-  }
-
-  return normalizeState(entry?.state);
-}
-
-function getRoleFromSpaceId(
-  content: CaseContent | undefined,
-  selectedSpaceId: string | undefined
-): CaseRole | undefined {
-  if (!selectedSpaceId) return undefined;
-
-  const roles = content?.roles;
-  if (!roles || typeof roles !== 'object') return undefined;
-
-  const arzt = roles.arzt;
-  if (
-    arzt &&
-    typeof arzt === 'object' &&
-    typeof arzt.space_room_id === 'string' &&
-    arzt.space_room_id === selectedSpaceId
-  ) {
-    return 'arzt';
-  }
-
-  const team = roles.team;
-  if (
-    team &&
-    typeof team === 'object' &&
-    typeof team.space_room_id === 'string' &&
-    team.space_room_id === selectedSpaceId
-  ) {
-    return 'team';
-  }
-
-  return undefined;
-}
-
-function getRoleFromCurrentUser(
-  mx: MatrixClient,
-  content: CaseContent | undefined
-): CaseRole | undefined {
-  const roles = content?.roles;
-  if (!roles || typeof roles !== 'object') return undefined;
-
-  for (const role of ['arzt', 'team'] as const) {
-    const entry = roles[role];
-    if (!entry || typeof entry !== 'object') continue;
-
-    const spaceRoomId = entry.space_room_id;
-    if (typeof spaceRoomId !== 'string' || !spaceRoomId) continue;
-
-    const membership = mx.getRoom(spaceRoomId)?.getMyMembership?.();
-    if (membership === 'join' || membership === 'invite') {
-      return role;
-    }
-  }
-
-  return undefined;
-}
-
-function getOtherRole(role: CaseRole | undefined): CaseRole | undefined {
-  if (role === 'arzt') return 'team';
-  if (role === 'team') return 'arzt';
-  return undefined;
-}
-
-function getRoleSpaceRoomId(
-  content: CaseContent | undefined,
-  role: CaseRole | undefined
-): string | undefined {
-  if (!role) return undefined;
-
-  const entry = content?.roles?.[role];
-  if (!entry || typeof entry !== 'object') return undefined;
-
-  const spaceRoomId = entry.space_room_id;
-  return typeof spaceRoomId === 'string' && spaceRoomId.trim() ? spaceRoomId.trim() : undefined;
-}
-
-function getCaseContent(room: Room): CaseContent | undefined {
-  const ev = room.currentState?.getStateEvents?.('io.kiconnect.case', '');
-  return ev?.getContent?.() as CaseContent | undefined;
-}
-
 function getTeamRequestContent(room: Room): TeamRequestContent | undefined {
   const ev = room.currentState?.getStateEvents?.('io.kiconnect.team_request', '');
   return ev?.getContent?.() as TeamRequestContent | undefined;
@@ -165,7 +76,9 @@ function getTeamDirectory(room: Room): Array<Required<TeamDirectoryMember>> {
   return members
     .map((member) => {
       const matrixUserId = String(member.matrix_user_id || member.matrix_uid || '').trim();
-      const role = String(member.role || '').trim().toLowerCase();
+      const role = String(member.role || '')
+        .trim()
+        .toLowerCase();
       const displayName = String(member.display_name || matrixUserId).trim() || matrixUserId;
       return {
         matrix_user_id: matrixUserId,
@@ -185,34 +98,18 @@ function getTeamDirectory(room: Room): Array<Required<TeamDirectoryMember>> {
 }
 
 function isTeamRequestOpen(content: TeamRequestContent | undefined): boolean {
-  return String(content?.status || '').trim().toLowerCase() === 'open';
+  return (
+    String(content?.status || '')
+      .trim()
+      .toLowerCase() === 'open'
+  );
 }
 
 function isTeamRequestActive(content: TeamRequestContent | undefined): boolean {
-  const status = String(content?.status || '').trim().toLowerCase();
+  const status = String(content?.status || '')
+    .trim()
+    .toLowerCase();
   return status === 'open' || status === 'pending' || status === 'waiting';
-}
-
-function getOwnRoleStatus(
-  mx: MatrixClient,
-  room: Room,
-  selectedSpaceId: string | undefined
-): { role?: CaseRole; own: CaseStatus; other: CaseStatus; spaceRoomId?: string } {
-  const content = getCaseContent(room);
-  const role = getRoleFromSpaceId(content, selectedSpaceId) || getRoleFromCurrentUser(mx, content);
-  const otherRole = getOtherRole(role);
-  const spaceRoomId = selectedSpaceId?.trim() || getRoleSpaceRoomId(content, role);
-
-  if (!role || !otherRole) {
-    return { role: undefined, own: 'done', other: 'done' };
-  }
-
-  return {
-    role,
-    own: getRoleEntryState(content?.roles?.[role]),
-    other: getRoleEntryState(content?.roles?.[otherRole]),
-    spaceRoomId,
-  };
 }
 
 function toErrString(e: unknown): string {
@@ -231,10 +128,6 @@ function toErrString(e: unknown): string {
   }
 }
 
-function isUsableSpaceId(value: unknown): value is string {
-  return typeof value === 'string' && value.trim().startsWith('!');
-}
-
 export function KiconnectRoomActions({ room }: Props): JSX.Element {
   const mx = useMatrixClient();
   const selectedSpaceId = useSelectedSpace();
@@ -249,8 +142,12 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
   const [sendingBroadcast, setSendingBroadcast] = useState(false);
   const [showTeamRequest, setShowTeamRequest] = useState(false);
   const [teamRequestTopic, setTeamRequestTopic] = useState('');
+  const [teamRequestTopicEdited, setTeamRequestTopicEdited] = useState(false);
+  const [recipientGroup, setRecipientGroup] = useState<CaseRole | undefined>();
   const [selectedRecipients, setSelectedRecipients] = useState<string[]>([]);
   const [sendingTeamRequest, setSendingTeamRequest] = useState(false);
+  const [pendingTeamRequest, setPendingTeamRequest] = useState<{ id: string; source: string } | null>(null);
+  const navigate = useNavigate();
   const [, forceUpdate] = useState(0);
   const [sending, setSending] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -258,28 +155,71 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
   const teamRoom = useMemo(() => isTeamRoom(room), [room]);
   const teamCommunicationRoom = useMemo(() => isTeamCommunicationRoom(room), [room]);
   const teamRequestRoom = useMemo(() => isTeamRequestRoom(room), [room]);
-  const caseInfo = getOwnRoleStatus(mx, room, selectedSpaceId);
+  const caseInfo = useCaseRoleStatus(mx, room, selectedSpaceId);
   const roomOwner = getRoomOwner(room);
   const currentUserId = mx.getUserId();
+  useEffect(() => {
+    if (!pendingTeamRequest || !currentUserId) return undefined;
+    if (pendingTeamRequest.source !== room.roomId) {
+      setPendingTeamRequest(null);
+      return undefined;
+    }
+    // Read only the local sync cache: the existing auto-join handles invitations.
+    // Polling also covers state arriving after the room/membership event.
+    const check = () => {
+      const target = findCreatedTeamRoom(mx.getRooms(), pendingTeamRequest.id, currentUserId);
+      if (!target) return;
+      clearInterval(interval);
+      clearTimeout(timeout);
+      setPendingTeamRequest(null);
+      navigate(getHomeRoomPath(target));
+    };
+    const interval = setInterval(check, 250);
+    const timeout = setTimeout(() => {
+      clearInterval(interval);
+      setPendingTeamRequest(null);
+      setErr('Der neue Raum ist noch nicht verfügbar. Bitte prüfen Sie „Letzte 3 Tage“, bevor Sie die Anfrage erneut senden.');
+    }, 60000);
+    check();
+    return () => {
+      clearInterval(interval);
+      clearTimeout(timeout);
+    };
+  }, [mx, navigate, currentUserId, pendingTeamRequest, room.roomId]);
   const teamRequest = getTeamRequestContent(room);
   const teamRequestOpen = isTeamRequestOpen(teamRequest);
   const teamRequestActive = isTeamRequestActive(teamRequest);
   const teamDirectory = getTeamDirectory(room);
-  const teamRequestOwner = (teamCommunicationRoom || teamRequestRoom) && roomOwner === currentUserId;
+  const senderName = currentUserId
+    ? mx.getUser(currentUserId)?.displayName?.trim() ||
+      teamDirectory.find((member) => member.matrix_user_id === currentUserId)?.display_name ||
+      room.getMember(currentUserId)?.name ||
+      currentUserId
+    : '';
+  const effectiveTeamRequestTopic = teamRequestTopicEdited
+    ? teamRequestTopic
+    : suggestTeamRequestTopic(senderName, selectedRecipients, teamDirectory, recipientGroup);
+  const editTeamRequestTopic = (value: string) => {
+    setTeamRequestTopicEdited(true);
+    setTeamRequestTopic(value);
+  };
+  const teamRequestOwner =
+    (teamCommunicationRoom || teamRequestRoom) && roomOwner === currentUserId;
   const teamRequestRecipient =
     (teamCommunicationRoom || teamRequestRoom) &&
     !!currentUserId &&
     isTeamRequestActive(teamRequest) &&
     !!teamRequest?.recipients?.[currentUserId];
-  const patientRoomOwner =
-    isPatientRoom(room) && (roomOwner ? roomOwner === currentUserId : caseInfo.role === undefined);
+  const patientRoomOwner = isPatientRoom(room) && !!roomOwner && roomOwner === currentUserId;
 
-  const erledigtLabel =
-    caseInfo.own === 'done' ? 'Wieder öffnen' : 'Erledigt';
+  const erledigtLabel = caseInfo.own === 'done' ? 'Wieder öffnen' : 'Erledigt';
 
   const canForward =
-    !!caseInfo.role && (caseInfo.own === 'open' || caseInfo.own === 'pending') && caseInfo.other === 'done';
-  const waitingPatient = !!caseInfo.role && !!caseInfo.spaceRoomId && !!getCaseContent(room)?.waiting_patient;
+    !!caseInfo.role &&
+    (caseInfo.own === 'open' || caseInfo.own === 'pending') &&
+    caseInfo.other === 'done';
+  const waitingPatient =
+    !!caseInfo.role && !!caseInfo.spaceRoomId && !!getCaseContent(room)?.waiting_patient;
 
   const forwardLabel =
     caseInfo.own === 'done' && (caseInfo.other === 'open' || caseInfo.other === 'pending')
@@ -368,18 +308,7 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
     setErr(null);
 
     try {
-      const spaceRoomId = caseInfo.spaceRoomId?.trim();
-
-      if (!isUsableSpaceId(spaceRoomId)) {
-        throw new Error('Keine gültige User-Space-ID verfügbar.');
-      }
-
-      await mx.sendEvent(room.roomId, 'io.kiconnect.case.toggle', {
-        by: mx.getUserId(),
-        ts: Date.now(),
-        space_room_id: spaceRoomId,
-        target_state: caseInfo.own === 'done' ? 'open' : 'done',
-      });
+      await sendCaseAction(mx, room, selectedSpaceId, 'toggle');
     } catch (e) {
       setErr(toErrString(e));
     } finally {
@@ -404,23 +333,7 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
     setErr(null);
 
     try {
-      const spaceRoomId = caseInfo.spaceRoomId?.trim();
-      console.log('[FORWARD] spaceRoomId', spaceRoomId);
-
-      if (!isUsableSpaceId(spaceRoomId)) {
-        console.log('[FORWARD] abort invalid spaceRoomId');
-        throw new Error('Keine gültige User-Space-ID verfügbar.');
-      }
-
-      console.log('[FORWARD] before sendEvent');
-
-      const res = await mx.sendEvent(room.roomId, 'io.kiconnect.case.forward', {
-        by: mx.getUserId(),
-        ts: Date.now(),
-        space_room_id: spaceRoomId,
-      });
-
-      console.log('[FORWARD] sendEvent ok', res);
+      await sendCaseAction(mx, room, selectedSpaceId, 'forward');
     } catch (e) {
       console.error('[FORWARD] sendEvent error', e);
       setErr(toErrString(e));
@@ -437,17 +350,7 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
     setErr(null);
 
     try {
-      const spaceRoomId = caseInfo.spaceRoomId?.trim();
-
-      if (!isUsableSpaceId(spaceRoomId)) {
-        throw new Error('Keine gültige User-Space-ID verfügbar.');
-      }
-
-      await mx.sendEvent(room.roomId, 'io.kiconnect.case.wait_patient', {
-        by: mx.getUserId(),
-        ts: Date.now(),
-        space_room_id: spaceRoomId,
-      });
+      await sendCaseAction(mx, room, selectedSpaceId, 'wait_patient');
     } catch (e) {
       setErr(toErrString(e));
     } finally {
@@ -475,12 +378,14 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
   };
 
   const toggleRecipient = (mxid: string) => {
+    setRecipientGroup(undefined);
     setSelectedRecipients((current) =>
       current.includes(mxid) ? current.filter((item) => item !== mxid) : [...current, mxid]
     );
   };
 
   const selectRecipientsByRole = (role: CaseRole) => {
+    setRecipientGroup(role);
     const ids = teamDirectory
       .filter((member) => member.role === role && member.matrix_user_id !== currentUserId)
       .map((member) => member.matrix_user_id);
@@ -491,12 +396,14 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
     if (sendingTeamRequest) return;
     setShowTeamRequest(false);
     setTeamRequestTopic('');
+    setTeamRequestTopicEdited(false);
+    setRecipientGroup(undefined);
     setSelectedRecipients([]);
   };
 
   const onSendTeamRequest = async () => {
-    const topic = teamRequestTopic.trim();
-    if (sendingTeamRequest) return;
+    const topic = effectiveTeamRequestTopic.trim();
+    if (sendingTeamRequest || pendingTeamRequest) return;
     if (!topic) {
       setErr('Bitte ein Topic eingeben.');
       return;
@@ -509,14 +416,16 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
     setSendingTeamRequest(true);
     setErr(null);
     try {
+      const requestId = crypto.randomUUID();
       await mx.sendEvent(room.roomId, 'io.kiconnect.team.request', {
-        request_id: crypto.randomUUID(),
+        request_id: requestId,
         topic,
         recipients: selectedRecipients,
         by: currentUserId,
         ts: Date.now(),
       });
       closeTeamRequest();
+      setPendingTeamRequest({ id: requestId, source: room.roomId });
     } catch (e) {
       setErr(toErrString(e));
     } finally {
@@ -574,7 +483,9 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
     }
   };
 
-  const recipientCandidates = teamDirectory.filter((member) => member.matrix_user_id !== currentUserId);
+  const recipientCandidates = teamDirectory.filter(
+    (member) => member.matrix_user_id !== currentUserId
+  );
   const arztCandidateCount = recipientCandidates.filter((member) => member.role === 'arzt').length;
   const teamCandidateCount = recipientCandidates.filter((member) => member.role === 'team').length;
 
@@ -702,8 +613,8 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
                   </Box>
 
                   <input
-                    value={teamRequestTopic}
-                    onChange={(event) => setTeamRequestTopic(event.target.value)}
+                    value={effectiveTeamRequestTopic}
+                    onChange={(event) => editTeamRequestTopic(event.target.value)}
                     autoFocus
                     placeholder="Topic"
                     style={{
@@ -759,8 +670,8 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
                     </button>
                     {recipientCandidates.length === 0 && (
                       <Text priority="400">
-                        Keine weiteren Empfänger vorhanden. Sie selbst werden nicht als
-                        Empfänger angeboten.
+                        Keine weiteren Empfänger vorhanden. Sie selbst werden nicht als Empfänger
+                        angeboten.
                       </Text>
                     )}
                     {recipientCandidates.map((member) => (
@@ -795,12 +706,20 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
 
                   {err && <Text size="T300">{err}</Text>}
                   <Box direction="Row" gap="200" justifyContent="End">
-                    <Button variant="Secondary" onClick={closeTeamRequest} disabled={sendingTeamRequest}>
+                    <Button
+                      variant="Secondary"
+                      onClick={closeTeamRequest}
+                      disabled={sendingTeamRequest}
+                    >
                       Abbrechen
                     </Button>
                     <Button
                       onClick={onSendTeamRequest}
-                      disabled={sendingTeamRequest || !teamRequestTopic.trim() || selectedRecipients.length === 0}
+                      disabled={
+                        sendingTeamRequest ||
+                        !effectiveTeamRequestTopic.trim() ||
+                        selectedRecipients.length === 0
+                      }
                     >
                       {sendingTeamRequest ? '…' : 'Einladen'}
                     </Button>
@@ -839,9 +758,15 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
   }
 
   if (teamCommunicationRoom) {
-    const recipientCandidates = teamDirectory.filter((member) => member.matrix_user_id !== currentUserId);
-    const arztCandidateCount = recipientCandidates.filter((member) => member.role === 'arzt').length;
-    const teamCandidateCount = recipientCandidates.filter((member) => member.role === 'team').length;
+    const recipientCandidates = teamDirectory.filter(
+      (member) => member.matrix_user_id !== currentUserId
+    );
+    const arztCandidateCount = recipientCandidates.filter(
+      (member) => member.role === 'arzt'
+    ).length;
+    const teamCandidateCount = recipientCandidates.filter(
+      (member) => member.role === 'team'
+    ).length;
 
     return (
       <>
@@ -866,11 +791,19 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
 
                   {teamRequestActive ? (
                     <Box direction="Row" gap="200" justifyContent="End">
-                      <Button variant="Secondary" onClick={closeTeamRequest} disabled={sendingTeamRequest}>
+                      <Button
+                        variant="Secondary"
+                        onClick={closeTeamRequest}
+                        disabled={sendingTeamRequest}
+                      >
                         Abbrechen
                       </Button>
                       {teamRequestOwner && (
-                        <Button variant="Critical" onClick={onResetTeamRequest} disabled={sendingTeamRequest}>
+                        <Button
+                          variant="Critical"
+                          onClick={onResetTeamRequest}
+                          disabled={sendingTeamRequest}
+                        >
                           {sendingTeamRequest ? '…' : 'Zurücksetzen'}
                         </Button>
                       )}
@@ -878,8 +811,8 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
                   ) : (
                     <>
                       <input
-                        value={teamRequestTopic}
-                        onChange={(event) => setTeamRequestTopic(event.target.value)}
+                        value={effectiveTeamRequestTopic}
+                        onChange={(event) => editTeamRequestTopic(event.target.value)}
                         autoFocus
                         placeholder="Topic"
                         style={{
@@ -959,12 +892,20 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
 
                       {err && <Text size="T300">{err}</Text>}
                       <Box direction="Row" gap="200" justifyContent="End">
-                        <Button variant="Secondary" onClick={closeTeamRequest} disabled={sendingTeamRequest}>
+                        <Button
+                          variant="Secondary"
+                          onClick={closeTeamRequest}
+                          disabled={sendingTeamRequest}
+                        >
                           Abbrechen
                         </Button>
                         <Button
                           onClick={onSendTeamRequest}
-                          disabled={sendingTeamRequest || !teamRequestTopic.trim() || selectedRecipients.length === 0}
+                          disabled={
+                            sendingTeamRequest ||
+                            !effectiveTeamRequestTopic.trim() ||
+                            selectedRecipients.length === 0
+                          }
                         >
                           {sendingTeamRequest ? '…' : 'Einladen'}
                         </Button>
@@ -1070,9 +1011,13 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
     <>
       <div className="kiconnect-room-actions">
         <div className="kiconnect-room-actions-divider" />
-        <button onClick={onToggleDone} disabled={sending}>
-          {sending ? '…' : erledigtLabel}
-        </button>
+        {caseInfo.ready ? (
+          <button onClick={onToggleDone} disabled={sending}>
+            {sending ? '…' : erledigtLabel}
+          </button>
+        ) : (
+          <span style={{ fontSize: 12 }}>Rollen- oder Statusdaten noch nicht verfügbar.</span>
+        )}
 
         {canForward && (
           <button onClick={onForward} disabled={sending}>
@@ -1080,7 +1025,7 @@ export function KiconnectRoomActions({ room }: Props): JSX.Element {
           </button>
         )}
 
-        {!!caseInfo.role && (
+        {caseInfo.ready && (
           <button onClick={onWaitPatient} disabled={sending || waitingPatient}>
             {sending ? '…' : waitingPatient ? 'Wartet auf Patient' : 'Warte auf Patient'}
           </button>

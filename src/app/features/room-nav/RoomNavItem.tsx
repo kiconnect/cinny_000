@@ -1,5 +1,5 @@
 import React, { MouseEventHandler, forwardRef, useEffect, useState } from 'react';
-import { MatrixClient, Room, RoomEvent } from 'matrix-js-sdk';
+import { Room, RoomEvent } from 'matrix-js-sdk';
 import {
   Avatar,
   Box,
@@ -65,6 +65,8 @@ import { StateEvent } from '../../../types/matrix/room';
 import { webRTCSupported } from '../../utils/rtc';
 import { isOwnedTeamRoom, isPatientRoom, isTeamRequestRoom } from '../../kiconnect/logic/roomState';
 import { timeHourMinute, today, yesterday } from '../../utils/time';
+import { getCaseContent, getPatientCaseStatus } from '../../kiconnect/logic/caseStatus';
+import { useCaseRoleStatus } from '../../kiconnect/hooks/useCaseRoleStatus';
 
 type RoomNavItemMenuProps = {
   room: Room;
@@ -224,70 +226,18 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
   }
 );
 
-type CaseRole = 'arzt' | 'team';
-
-type CaseRoleEntry = {
-  space_room_id?: string;
-  state?: string;
-};
-
-type CaseContent = {
-  waiting_patient?: boolean;
-  waiting_since?: number | null;
-  waiting_owner_role?: string | null;
-  roles?: {
-    bot?: CaseRoleEntry | string;
-    arzt?: CaseRoleEntry | string;
-    team?: CaseRoleEntry | string;
-  };
-};
-
 type CaseStatus = 'open' | 'pending' | 'waiting' | 'done';
-
-function getRoleEntryState(entry: CaseRoleEntry | string | undefined): CaseStatus {
-  if (typeof entry === 'string') {
-    const value = entry.trim().toLowerCase();
-    if (value === 'done') return 'done';
-    if (value === 'waiting') return 'waiting';
-    if (value === 'pending') return 'pending';
-    return 'open';
-  }
-
-  const value = String(entry?.state || '').trim().toLowerCase();
-  if (value === 'done') return 'done';
-  if (value === 'waiting') return 'waiting';
-  if (value === 'pending') return 'pending';
-  return 'open';
-}
 
 function getTeamRequestStatus(room: Room): CaseStatus {
   const request = room.currentState
     ?.getStateEvents?.('io.kiconnect.team_request', '')
     ?.getContent?.();
-  const status = String(request?.status || '').trim().toLowerCase();
+  const status = String(request?.status || '')
+    .trim()
+    .toLowerCase();
   if (status === 'done') return 'done';
   if (status === 'waiting') return 'waiting';
   if (status === 'pending') return 'pending';
-  return 'open';
-}
-
-function isCaseFullyDone(content: CaseContent | undefined): boolean {
-  if (!content?.roles) return false;
-
-  return (['bot', 'arzt', 'team'] as const).every(
-    (role) => getRoleEntryState(content.roles?.[role]) === 'done'
-  );
-}
-
-function getPatientCaseStatus(content: CaseContent | undefined): CaseStatus {
-  if (!content?.roles) return 'open';
-
-  const states = (['bot', 'arzt', 'team'] as const).map((role) =>
-    getRoleEntryState(content.roles?.[role])
-  );
-
-  if (states.every((state) => state === 'done')) return 'done';
-  if (states.some((state) => state === 'pending')) return 'pending';
   return 'open';
 }
 
@@ -304,12 +254,12 @@ function getMessagePreview(room: Room): { body: string; ts: number } | undefined
       content.msgtype === 'm.image'
         ? 'Bild'
         : content.msgtype === 'm.file'
-          ? 'Datei'
-          : content.msgtype === 'm.audio'
-            ? 'Audionachricht'
-            : content.msgtype === 'm.video'
-              ? 'Video'
-              : '';
+        ? 'Datei'
+        : content.msgtype === 'm.audio'
+        ? 'Audionachricht'
+        : content.msgtype === 'm.video'
+        ? 'Video'
+        : '';
 
     if (body || fallback) {
       return { body: body || fallback, ts: event.getTs() };
@@ -323,61 +273,6 @@ function formatMessageTimestamp(ts: number): string {
   if (today(ts)) return timeHourMinute(ts, true);
   if (yesterday(ts)) return 'Gestern';
   return new Intl.DateTimeFormat('de-AT', { day: '2-digit', month: '2-digit' }).format(ts);
-}
-
-function getRoleFromSpaceId(
-  content: CaseContent | undefined,
-  selectedSpaceId: string | undefined
-): CaseRole | undefined {
-  if (!selectedSpaceId) return undefined;
-
-  const roles = content?.roles;
-  if (!roles || typeof roles !== 'object') return undefined;
-
-  const arzt = roles.arzt;
-  if (
-    arzt &&
-    typeof arzt === 'object' &&
-    typeof arzt.space_room_id === 'string' &&
-    arzt.space_room_id === selectedSpaceId
-  ) {
-    return 'arzt';
-  }
-
-  const team = roles.team;
-  if (
-    team &&
-    typeof team === 'object' &&
-    typeof team.space_room_id === 'string' &&
-    team.space_room_id === selectedSpaceId
-  ) {
-    return 'team';
-  }
-
-  return undefined;
-}
-
-function getRoleFromCurrentUser(
-  mx: MatrixClient,
-  content: CaseContent | undefined
-): CaseRole | undefined {
-  const roles = content?.roles;
-  if (!roles || typeof roles !== 'object') return undefined;
-
-  for (const role of ['arzt', 'team'] as const) {
-    const entry = roles[role];
-    if (!entry || typeof entry !== 'object') continue;
-
-    const spaceRoomId = entry.space_room_id;
-    if (typeof spaceRoomId !== 'string' || !spaceRoomId) continue;
-
-    const membership = mx.getRoom(spaceRoomId)?.getMyMembership?.();
-    if (membership === 'join' || membership === 'invite') {
-      return role;
-    }
-  }
-
-  return undefined;
 }
 
 function CallChatToggle() {
@@ -433,19 +328,16 @@ export function RoomNavItem({
   const subject = typeof topic === 'string' && topic.trim() ? topic.trim() : 'Kein Betreff';
   const messagePreview = getMessagePreview(room);
 
-  const caseContent = room.currentState
-    ?.getStateEvents('io.kiconnect.case', '')
-    ?.getContent?.() as CaseContent | undefined;
-
-  const caseRole = getRoleFromSpaceId(caseContent, selectedSpaceId) || getRoleFromCurrentUser(mx, caseContent);
+  const caseContent = getCaseContent(room);
+  const caseInfo = useCaseRoleStatus(mx, room, selectedSpaceId);
 
   const caseStatus = isTeamRequestRoom(room)
-      ? getTeamRequestStatus(room)
-    : caseRole
-      ? getRoleEntryState(caseContent?.roles?.[caseRole])
+    ? getTeamRequestStatus(room)
+    : caseInfo.role
+    ? caseInfo.own
     : isPatientRoom(room)
-      ? getPatientCaseStatus(caseContent)
-      : 'done';
+    ? getPatientCaseStatus(caseContent)
+    : 'done';
   const caseWaitingPatient = isPatientRoom(room) && caseContent?.waiting_patient === true;
   const caseDone = caseStatus === 'done';
   const casePending = caseStatus === 'pending';
@@ -610,12 +502,14 @@ export function RoomNavItem({
                   color: caseWaitingPatient
                     ? '#2368b8'
                     : caseWaiting
-                      ? '#2368b8'
+                    ? '#2368b8'
                     : casePending
-                      ? '#1E7F93'
-                      : caseEffectivelyDone
-                        ? undefined
-                        : '#c0392b',
+                    ? '#1E7F93'
+                    : caseEffectivelyDone
+                    ? undefined
+                    : caseStatus === 'open'
+                    ? '#c0392b'
+                    : undefined,
                   fontWeight: caseEffectivelyDone ? undefined : '600',
                   opacity: caseEffectivelyDone ? 0.4 : 0.9,
                   textDecoration: caseEffectivelyDone ? 'line-through' : 'none',
