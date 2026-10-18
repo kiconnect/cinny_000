@@ -1,5 +1,6 @@
 import type { MatrixClient } from 'matrix-js-sdk';
 import type { ClientConfig } from '../../hooks/useClientConfig';
+import { requestNotificationPermission } from './notificationPermission';
 
 export const WEB_PUSH_APP_ID = 'at.kiconnect.cinny.webpush';
 const PUSHKEY_STORAGE_KEY = 'kiconnect.webpush.pushkey.v1';
@@ -37,6 +38,7 @@ const getOrCreatePushkey = (): string => {
 
 export async function getWebPushStatus(mx: MatrixClient): Promise<WebPushStatus> {
   if (!webPushSupported()) return 'unsupported';
+  if (Notification.permission !== 'granted') return 'off';
   const registration = await navigator.serviceWorker.ready;
   const subscription = await registration.pushManager.getSubscription();
   const pushkey = getPushkey();
@@ -53,7 +55,7 @@ export async function enableWebPush(mx: MatrixClient, config: ClientConfig): Pro
       'Push wird von diesem Browser nicht unterstützt. Installieren Sie KI-Connect als PWA.'
     );
   }
-  const permission = await Notification.requestPermission();
+  const permission = await requestNotificationPermission();
   if (permission !== 'granted') throw new Error('Benachrichtigungen wurden nicht erlaubt.');
 
   const { gatewayUrl, vapidPublicKey } = pushConfig(config);
@@ -85,6 +87,9 @@ export async function enableWebPush(mx: MatrixClient, config: ClientConfig): Pro
     profile_tag: '',
     pushkey,
   } as Parameters<MatrixClient['setPusher']>[0]);
+  if ((await getWebPushStatus(mx)) !== 'on') {
+    throw new Error('Push-Registrierung konnte nicht bestätigt werden. Bitte erneut aktivieren.');
+  }
 }
 
 export async function removeLocalWebPushSubscription(): Promise<void> {

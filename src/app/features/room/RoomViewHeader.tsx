@@ -1,4 +1,5 @@
 import React, { MouseEventHandler, forwardRef, useEffect, useState } from 'react';
+import { requestNotificationPermission } from '../../kiconnect/push/notificationPermission';
 import FocusTrap from 'focus-trap-react';
 import {
   Box,
@@ -118,7 +119,7 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(
             setPushError('Benachrichtigungen werden von diesem Browser nicht unterstützt.');
             return;
           }
-          const permission = await window.Notification.requestPermission();
+          const permission = await requestNotificationPermission();
           setLocalNotificationStatus(permission);
           if (permission !== 'granted') {
             setPushError('Benachrichtigungen wurden nicht erlaubt.');

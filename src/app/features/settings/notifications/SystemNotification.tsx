@@ -7,6 +7,7 @@ import { SettingTile } from '../../../components/setting-tile';
 import { useSetting } from '../../../state/hooks/settings';
 import { settingsAtom } from '../../../state/settings';
 import { getNotificationState, usePermissionState } from '../../../hooks/usePermission';
+import { requestNotificationPermission as requestAndRefreshPermission } from '../../../kiconnect/push/notificationPermission';
 import { useEmailNotifications } from '../../../hooks/useEmailNotifications';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
@@ -93,7 +94,7 @@ export function SystemNotification() {
   );
 
   const requestNotificationPermission = () => {
-    window.Notification.requestPermission();
+    void requestAndRefreshPermission().catch(() => undefined);
   };
 
   return (

@@ -126,6 +126,7 @@ export const setRoomNotificationPreference = async (
 
   // set new preference
   if (mode === RoomNotificationMode.Unset) {
+    await mx.getPushRules();
     return;
   }
 
@@ -140,6 +141,7 @@ export const setRoomNotificationPreference = async (
       ],
       actions: getNotificationModeActions(NotificationMode.OFF),
     });
+    await mx.getPushRules();
     return;
   }
 
@@ -149,6 +151,8 @@ export const setRoomNotificationPreference = async (
         ? getNotificationModeActions(NotificationMode.NotifyLoud)
         : getNotificationModeActions(NotificationMode.OFF),
   });
+  // Refresh the SDK's rule cache immediately, without waiting for sync/restart.
+  await mx.getPushRules();
 };
 
 export const useSetRoomNotificationPreference = (roomId: string) => {

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { NOTIFICATION_PERMISSION_CHANGED } from '../kiconnect/push/notificationPermission';
 
 export const getNotificationState = (): PermissionState => {
   if ('Notification' in window) {
@@ -17,14 +18,23 @@ export function usePermissionState(name: PermissionName, initialValue: Permissio
 
   useEffect(() => {
     let permissionStatus: PermissionStatus;
+    let disposed = false;
+
+    const refreshNotification = () => {
+      if (name === 'notifications' && !disposed) setPermissionState(getNotificationState());
+    };
+    refreshNotification();
+    window.addEventListener(NOTIFICATION_PERMISSION_CHANGED, refreshNotification);
+    window.addEventListener('focus', refreshNotification);
+    document.addEventListener('visibilitychange', refreshNotification);
 
     function handlePermissionChange(this: PermissionStatus) {
       setPermissionState(this.state);
     }
 
-    navigator.permissions
-      .query({ name })
+    navigator.permissions?.query({ name })
       .then((permStatus: PermissionStatus) => {
+        if (disposed) return;
         permissionStatus = permStatus;
         handlePermissionChange.apply(permStatus);
         permStatus.addEventListener('change', handlePermissionChange);
@@ -34,6 +44,10 @@ export function usePermissionState(name: PermissionName, initialValue: Permissio
       });
 
     return () => {
+      disposed = true;
+      window.removeEventListener(NOTIFICATION_PERMISSION_CHANGED, refreshNotification);
+      window.removeEventListener('focus', refreshNotification);
+      document.removeEventListener('visibilitychange', refreshNotification);
       permissionStatus?.removeEventListener('change', handlePermissionChange);
     };
   }, [name]);
