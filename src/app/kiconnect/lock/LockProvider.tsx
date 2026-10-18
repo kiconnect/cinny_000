@@ -19,6 +19,7 @@ import {
   writeAccountType,
 } from '../logic/accountType';
 import { clientLogout } from '../logic/logout';
+import { readPersonalDevice, writePersonalDevice, PERSONAL_DEVICE_CHANGED } from '../logic/personalDevice';
 import {
   DEFAULT_IDLE_TIMEOUT_MINUTES,
   KICONNECT_PREFERENCES_EVENT_TYPE,
@@ -42,6 +43,8 @@ type LockContextValue = {
   canLock: boolean;
   accountType: KiconnectAccountType;
   idleTimeoutMinutes: number;
+  personalDevice: boolean;
+  setPersonalDevice: (enabled: boolean) => void;
   setIdleTimeoutMinutes: (minutes: number) => Promise<void>;
   lock: () => void;
 };
@@ -91,6 +94,22 @@ export function KiconnectLockProvider({ children, mx }: Props): JSX.Element {
     readAccountType(userId)
   );
   const isTeam = accountType === 'team';
+  const [personalDevice, setPersonalDeviceState] = useState(() => readPersonalDevice(userId));
+  useEffect(() => {
+    const refresh = () => setPersonalDeviceState(readPersonalDevice(userId));
+    refresh();
+    window.addEventListener('storage', refresh);
+    window.addEventListener(PERSONAL_DEVICE_CHANGED, refresh);
+    return () => {
+      window.removeEventListener('storage', refresh);
+      window.removeEventListener(PERSONAL_DEVICE_CHANGED, refresh);
+    };
+  }, [userId]);
+  const setPersonalDevice = useCallback((enabled: boolean) => {
+    if (!isTeam) return;
+    writePersonalDevice(userId, enabled);
+    setPersonalDeviceState(enabled);
+  }, [isTeam, userId]);
   const timeoutMs = idleTimeoutMinutes * 60 * 1000;
   const initialRecord = useMemo(() => {
     const record = readLockRecord(userId);
@@ -466,10 +485,12 @@ export function KiconnectLockProvider({ children, mx }: Props): JSX.Element {
       canLock: !isTeam,
       accountType,
       idleTimeoutMinutes,
+      personalDevice: isTeam && personalDevice,
+      setPersonalDevice,
       setIdleTimeoutMinutes,
       lock,
     }),
-    [accountType, idleTimeoutMinutes, isTeam, lock, locked, setIdleTimeoutMinutes]
+    [accountType, idleTimeoutMinutes, isTeam, lock, locked, setIdleTimeoutMinutes, personalDevice, setPersonalDevice]
   );
 
   return (

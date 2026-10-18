@@ -10,6 +10,7 @@ import React, {
 } from 'react';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { clientLogout } from '../logic/logout';
+import { readPersonalDevice } from '../logic/personalDevice';
 import { useKiconnectLock } from '../lock/LockProvider';
 
 type IdleUserState = 'active' | 'idle';
@@ -57,7 +58,7 @@ export const useTeamIdleMonitor = (): TeamIdleContextValue => {
 
 export function TeamIdleMonitorProvider({ children }: { children: ReactNode }): JSX.Element {
   const mx = useMatrixClient();
-  const { accountType, idleTimeoutMinutes } = useKiconnectLock();
+  const { accountType, idleTimeoutMinutes, personalDevice } = useKiconnectLock();
   const [status, setStatus] = useState<TeamIdleStatus>(
     accountType === 'team' ? 'starting' : 'not-team'
   );
@@ -80,6 +81,7 @@ export function TeamIdleMonitorProvider({ children }: { children: ReactNode }): 
   }, []);
 
   const logoutTeam = useCallback(async () => {
+    if (readPersonalDevice(mx.getUserId() ?? '')) return;
     if (logoutStartedRef.current) return;
     logoutStartedRef.current = true;
     updateStatus('logging-out');
@@ -94,6 +96,11 @@ export function TeamIdleMonitorProvider({ children }: { children: ReactNode }): 
   }, [mx, updateStatus]);
 
   const start = useCallback(async () => {
+    if (personalDevice || readPersonalDevice(mx.getUserId() ?? '') || idleTimeoutMinutes === 0) {
+      stop();
+      updateStatus('disabled');
+      return;
+    }
     const IdleDetector = getIdleDetector();
     if (!IdleDetector) {
       updateStatus('unsupported');
@@ -108,6 +115,7 @@ export function TeamIdleMonitorProvider({ children }: { children: ReactNode }): 
     detectorRef.current = detector;
 
     const applyState = () => {
+      if (controller.signal.aborted || readPersonalDevice(mx.getUserId() ?? '')) return;
       if (detector.userState === 'idle') {
         updateStatus('idle');
         void logoutTeam();
@@ -127,7 +135,7 @@ export function TeamIdleMonitorProvider({ children }: { children: ReactNode }): 
     } catch (error) {
       if ((error as Error)?.name !== 'AbortError') updateStatus('error');
     }
-  }, [idleTimeoutMinutes, logoutTeam, stop, updateStatus]);
+  }, [idleTimeoutMinutes, logoutTeam, stop, updateStatus, personalDevice, mx]);
 
   const requestPermission = useCallback(async () => {
     const IdleDetector = getIdleDetector();
@@ -155,7 +163,7 @@ export function TeamIdleMonitorProvider({ children }: { children: ReactNode }): 
       return undefined;
     }
 
-    if (idleTimeoutMinutes === 0) {
+    if (idleTimeoutMinutes === 0 || personalDevice) {
       logoutStartedRef.current = false;
       stop();
       updateStatus('disabled');
@@ -178,7 +186,7 @@ export function TeamIdleMonitorProvider({ children }: { children: ReactNode }): 
       .catch(() => updateStatus('permission-required'));
 
     return stop;
-  }, [accountType, idleTimeoutMinutes, start, stop, updateStatus]);
+  }, [accountType, idleTimeoutMinutes, start, stop, updateStatus, personalDevice]);
 
   const value = useMemo(
     () => ({ status, changedAt, requestPermission }),

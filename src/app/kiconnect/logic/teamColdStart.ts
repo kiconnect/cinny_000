@@ -2,6 +2,7 @@ import { createClient } from 'matrix-js-sdk';
 import { getFallbackSession } from '../../state/sessions';
 import { readAccountType } from './accountType';
 import { clientLogout } from './logout';
+import { readPersonalDevice } from './personalDevice';
 
 const TEAM_RUNTIME_SESSION_KEY = 'kiconnect.team-runtime-session.v1';
 
@@ -30,7 +31,8 @@ export async function handleTeamColdStart(): Promise<boolean> {
   const runtimeSessionExists = sessionStorage.getItem(TEAM_RUNTIME_SESSION_KEY) === 'active';
   sessionStorage.setItem(TEAM_RUNTIME_SESSION_KEY, 'active');
 
-  if (!session || runtimeSessionExists || readAccountType(session.userId) !== 'team') {
+  if (!session || runtimeSessionExists || readAccountType(session.userId) !== 'team' ||
+      readPersonalDevice(session.userId)) {
     return false;
   }
 

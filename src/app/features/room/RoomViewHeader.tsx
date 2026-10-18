@@ -79,7 +79,7 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(
   ({ room, requestClose, canAddAuth, requestAuthAdd, canManageConsent, requestConsent }, ref) => {
     const mx = useMatrixClient();
     const clientConfig = useClientConfig();
-    const { accountType, canLock, idleTimeoutMinutes, setIdleTimeoutMinutes, lock } =
+    const { accountType, canLock, idleTimeoutMinutes, setIdleTimeoutMinutes, lock, personalDevice, setPersonalDevice } =
       useKiconnectLock();
     const idleMonitor = useTeamIdleMonitor();
     const { navigateRoom } = useRoomNavigate();
@@ -286,6 +286,28 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(
         </Box>
         <Line variant="Surface" size="300" />
         <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
+          {accountType === 'team' && (
+            <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
+              <Text size="T200">Auf diesem persönlichen Gerät angemeldet bleiben</Text>
+              <Button type="button" size="400" variant="Primary" aria-pressed={personalDevice}
+                style={{ width: '100%', minHeight: 44 }} onClick={() => {
+                  try {
+                    setPersonalDevice(!personalDevice);
+                    setIdleTimeoutMessage(undefined);
+                  } catch {
+                    setIdleTimeoutMessage('Die Geräteeinstellung konnte nicht gespeichert werden.');
+                  }
+                }}>
+                <Text as="span" size="T300">{personalDevice ? 'Deaktivieren' : 'Aktivieren'}</Text>
+              </Button>
+              <Text size="T200" priority="300">
+                {personalDevice ? 'Aktiv: keine automatische Abmeldung auf diesem Gerät.' :
+                  'Nur für private Geräte mit PIN oder Biometrie. Nicht auf gemeinsam genutzten Geräten aktivieren.'}
+              </Text>
+              {personalDevice && <Text size="T200">Die Timeout-Zeit unten gilt weiterhin auf anderen Geräten.
+                Manuelles Abmelden bleibt möglich.</Text>}
+            </Box>
+          )}
           <form onSubmit={handleIdleTimeoutSubmit} style={{ padding: config.space.S100 }}>
             <Text as="label" htmlFor="kiconnect-idle-timeout" size="T200" priority="300">
               Timeout-Zeit in Minuten (0–120, 0 = aus)
@@ -320,6 +342,7 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(
             )}
           </form>
           {accountType === 'team' &&
+            !personalDevice &&
             idleTimeoutMinutes > 0 &&
             (idleMonitor.status === 'unsupported' ||
               idleMonitor.status === 'denied' ||
