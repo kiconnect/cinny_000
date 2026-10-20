@@ -37,6 +37,7 @@ import { AuthMetadataProvider } from '../../hooks/useAuthMetadata';
 import { getFallbackSession } from '../../state/sessions';
 import { AutoDiscovery } from './AutoDiscovery';
 import { KiconnectLockProvider } from '../../kiconnect/lock/LockProvider';
+import { PatientPushPolicy } from '../../kiconnect/push/PatientPushPolicy';
 
 function ClientRootLoading() {
   return (
@@ -224,6 +225,7 @@ export function ClientRoot({ children }: ClientRootProps) {
             <ClientRootLoading />
           ) : (
             <MatrixClientProvider value={mx}>
+              <PatientPushPolicy />
               <ServerConfigsLoader>
                 {(serverConfigs) => (
                   <CapabilitiesProvider value={serverConfigs.capabilities ?? {}}>

@@ -1,0 +1,61 @@
+Patienten-Push-Regeln – Dev, 20.10.2026
+
+Die zuletzt von Alfred gewählte Lösung ersetzt die geplante gerätebezogene
+Foreground-Bestätigung: keine neue Gateway-API, keine Heartbeats, keine still
+verworfenen Service-Worker-Pushs.
+
+Cinny hinterlegt nach erfolgreichem Sync Matrix-Override-Pushregeln für die
+eigenen beigetretenen Patientenräume (io.kiconnect.room: kind=patient,
+owner=angemeldete Matrix-ID). Kontotyp muss patient sein; z-Konten ausgeschlossen.
+Andere Räume und Teamkonten erhalten keine neuen Regeln.
+
+Push erlaubt:
+- m.room.message von @z*-Konten, einschließlich Bilder/Befunde/Dateien;
+- m.room.encrypted von @z*-Konten;
+- m.room.message von @bot-*-Konten mit vorhandenem stringförmigem
+  content["io.kiconnect.broadcast"].request_id.
+Der vorhandene Bot-Rundnachrichtenpfad setzt dieses Merkmal bereits.
+
+Keine Pushs für andere Ereignisse in diesen Patientenräumen, insbesondere
+normale Botantworten, Beitritte/Austritte/Einladungen, Themen-/Statusänderungen.
+Korrekturen (m.replace) bleiben ebenfalls still. Kein Erraten anhand des Texts.
+Eine verschlüsselte Bot-Rundnachricht ist nicht anhand des verborgenen Merkmals
+serverseitig erkennbar; der bestehende Rundnachrichtenpfad sendet unverschlüsselte
+Matrix-Nachrichten über den transportverschlüsselten Kanal.
+
+Die Regeln betreffen das Patientenkonto auf allen Geräten, nicht nur ein Gerät.
+Master-Mute bleibt bestehen. Normale benutzerdefinierte Mute-Overrides vor der
+Policy bleiben wirksam. Die Policy ist keine neue Berechtigungsprüfung:
+Raummitgliedschaften und das vorhandene z-/bot-Kontonamensschema bleiben Grundlage.
+Keine Nachrichten werden gelöscht oder als gelesen markiert.
+Echte Teamnachrichten dürfen auch im Vordergrund weiterhin Push auslösen.
+
+Aktivierung: vorhandene Patienten müssen die neue Cinny-Version mindestens
+einmal öffnen. Die Regeln werden dann am Homeserver gespeichert und gelten
+auch bei geschlossener App. Noch nicht aktualisierte Konten sind NICHT bereits
+umgestellt. Neue eigene Patientenräume werden ebenfalls berücksichtigt.
+Fehlgeschlagene Speicherung wird alle 15 Sekunden erneut versucht; nach Erfolg
+erfolgt kein periodischer Schreibzugriff. Erlaubnisregeln werden vor dem
+abschließenden raumbezogenen Catch-all installiert.
+
+Dev-Nachweise:
+- 11 gezielte Tests einschließlich tatsächlichem Matrix-SDK-PushProcessor;
+- alle acht Node-Testdateien erfolgreich;
+- sieben synthetische Fälle gegen den installierten Synapse-Rust-Regelprüfer:
+  Text/Datei vom Arzt, Botantwort, Rundnachricht, Mitgliedschaft, Topic, Korrektur;
+  keine echten Kontoregeln oder Nachrichten für diesen Test verändert;
+- Dev-Build erfolgreich. Globaler TypeScript-Check bleibt wegen vorhandener
+  Matrix-SDK-Typ-/Compilerinkompatibilitäten fehlerhaft, nicht als bestanden melden.
+Noch nötig: echte Handytests mit aktualisiertem Patientenkonto, insbesondere
+Botflow ohne Push, Arzttext/Befund und Rundnachricht mit Hintergrundpush;
+Team-Push sowie iPhone und Android separat bestätigen.
+
+Rollback: Ein alter Cinny-Build entfernt gespeicherte Matrix-Regeln NICHT.
+Zuerst automatische Installation durch alten Build beenden; danach im
+betroffenen Patientenkonto ausschließlich Override-Regeln mit Präfix
+io.kiconnect.patient-push.v1. über die authentifizierte Matrix-Pushrules-API
+löschen. Andere Regeln und Push-Abonnements erhalten.
+
+Prod unverändert. Gateway-Fix von 18.10. bleibt unverändert.
+Beim späteren Release zusammen mit Patienten-Timeline-Änderung bec4606 testen.
+Prod mit eigener lokaler Konfiguration bauen, keine Dev-Builds oder Logos kopieren.
