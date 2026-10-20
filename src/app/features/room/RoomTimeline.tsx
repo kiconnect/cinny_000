@@ -88,6 +88,8 @@ import { MessageLayout, settingsAtom } from '../../state/settings';
 import { useMatrixEventRenderer } from '../../hooks/useMatrixEventRenderer';
 import { Reactions, Message, Event, EncryptedContent } from './message';
 import { useMemberEventParser } from '../../hooks/useMemberEventParser';
+import { useKiconnectLock } from '../../kiconnect/lock/LockProvider';
+import { hidePatientRoomActivity } from '../../kiconnect/logic/patientTimeline';
 import * as customHtmlCss from '../../styles/CustomHtml.css';
 import { RoomIntro } from '../../components/room-intro';
 import {
@@ -432,6 +434,7 @@ const getRoomUnreadInfo = (room: Room, scrollTo = false) => {
 
 export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimelineProps) {
   const mx = useMatrixClient();
+  const { accountType } = useKiconnectLock();
   const useAuthentication = useMediaAuthentication();
   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
   const [messageLayout] = useSetting(settingsAtom, 'messageLayout');
@@ -1669,17 +1672,24 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       prevEvent.getType() === mEvent.getType() &&
       minuteDifference(prevEvent.getTs(), mEvent.getTs()) < 2;
 
-    const eventJSX = reactionOrEditEvent(mEvent)
-      ? null
-      : renderMatrixEvent(
-          mEvent.getType(),
-          typeof mEvent.getStateKey() === 'string',
-          mEventId,
-          mEvent,
-          item,
-          timelineSet,
-          collapsed
-        );
+    const eventJSX =
+      reactionOrEditEvent(mEvent) ||
+      hidePatientRoomActivity(
+        accountType,
+        mx.getSafeUserId(),
+        mEvent.getType(),
+        typeof mEvent.getStateKey() === 'string'
+      )
+        ? null
+        : renderMatrixEvent(
+            mEvent.getType(),
+            typeof mEvent.getStateKey() === 'string',
+            mEventId,
+            mEvent,
+            item,
+            timelineSet,
+            collapsed
+          );
     prevEvent = mEvent;
     isPrevRendered = !!eventJSX;
 
